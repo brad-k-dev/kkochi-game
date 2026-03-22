@@ -272,6 +272,74 @@
     }
     .deliver-btn:hover { transform: translateY(-2px); }
 
+    /* ─── TAB NAV ─── */
+    .tab-nav {
+      display: flex; gap: 0; margin-bottom: 20px;
+      background: #f0ede8; border-radius: 14px; padding: 4px;
+    }
+    .tab-btn {
+      flex: 1; padding: 11px 0; border: none; background: transparent;
+      border-radius: 10px; font-size: 0.9rem; font-weight: 700;
+      font-family: 'Noto Sans KR', sans-serif; color: #bbb;
+      cursor: pointer; transition: all 0.2s;
+    }
+    .tab-btn.active {
+      background: white; color: #E65100;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+
+    /* ─── HISTORY ─── */
+    .history-list { display: flex; flex-direction: column; gap: 16px; }
+    .history-card {
+      background: white; border-radius: 16px;
+      padding: 18px; box-shadow: 0 2px 10px rgba(0,0,0,0.07);
+    }
+    .history-time {
+      font-size: 0.78rem; color: #bbb; font-weight: 700;
+      margin-bottom: 12px;
+    }
+    .history-empty {
+      text-align: center; padding: 60px 20px;
+      font-size: 1rem; font-weight: 700; color: #ccc;
+    }
+
+    /* ─── STAR RATING ─── */
+    .star-row { display: flex; gap: 4px; margin: 8px 0; }
+    .star-btn {
+      font-size: 1.7rem; background: none; border: none;
+      cursor: pointer; opacity: 0.25; transition: opacity 0.1s, transform 0.1s;
+      padding: 0;
+    }
+    .star-btn.on { opacity: 1; transform: scale(1.15); }
+
+    /* ─── REVIEW FORM / DISPLAY ─── */
+    .review-section {
+      margin-top: 14px; padding-top: 14px;
+      border-top: 1px solid #f0f0f0;
+    }
+    .review-section-label {
+      font-size: 0.82rem; font-weight: 700; color: #aaa; margin-bottom: 6px;
+    }
+    .review-textarea {
+      width: 100%; border: 2px solid #eee; border-radius: 10px;
+      padding: 10px; font-size: 0.88rem; resize: none; outline: none;
+      font-family: 'Noto Sans KR', sans-serif; margin-top: 4px;
+    }
+    .review-textarea:focus { border-color: #FF7043; }
+    .review-submit-btn {
+      width: 100%; padding: 12px; background: #FF7043; color: white;
+      border: none; border-radius: 10px; font-size: 0.9rem; font-weight: 700;
+      font-family: 'Noto Sans KR', sans-serif; cursor: pointer; margin-top: 8px;
+      transition: transform 0.15s;
+    }
+    .review-submit-btn:hover { transform: translateY(-1px); }
+    .review-display {
+      background: #FFF9F0; border-radius: 10px; padding: 12px; margin-top: 8px;
+    }
+    .review-stars-display { font-size: 1.2rem; margin-bottom: 5px; }
+    .review-comment-display { font-size: 0.88rem; color: #666; font-style: italic; }
+    .no-review-txt { font-size: 0.82rem; color: #ccc; text-align: center; margin-top: 8px; }
+
     /* ─── OVERLAY ─── */
     .overlay {
       position: fixed; top: 0; left: 0; width: 100%; height: 100%;
@@ -307,33 +375,46 @@
     <div class="page-subtitle">먹고 싶은 꼬치를 골라주세요! (최대 4개)</div>
   </div>
 
-  <div id="order-form">
-    <div class="menu-grid" id="menu-grid"></div>
-
-    <div class="total-bar">
-      총 <span id="count-disp">0</span>개 / 4개
-    </div>
-
-    <div class="sauce-box">
-      <span class="sauce-box-label">🧴 소스 선택 (여러 개 가능)</span>
-      <div class="sauce-chips" id="sauce-chips"></div>
-    </div>
-
-    <div class="special-box">
-      <label>💬 특별 요청사항</label>
-      <textarea id="special-req" rows="2" placeholder="예: 맵지 않게 해주세요, 많이 주세요…"></textarea>
-    </div>
-
-    <button class="order-btn" id="order-btn" onclick="placeOrder()" disabled>
-      🛒 주문하기
-    </button>
+  <div class="tab-nav">
+    <button class="tab-btn active" id="tab-customer-order"   onclick="switchTab('customer','order')">🛒 주문하기</button>
+    <button class="tab-btn"        id="tab-customer-history" onclick="switchTab('customer','history')">📋 주문 내역</button>
   </div>
 
-  <div id="order-sent">
-    <span class="sent-emoji">🍢</span>
-    <div class="sent-title">주문이 전달됐어요!</div>
-    <div class="sent-sub">사장님이 열심히 준비하고 있어요</div>
-    <div class="dots" style="margin-top:20px;"><span>●</span><span>●</span><span>●</span></div>
+  <!-- 주문 탭 -->
+  <div id="customer-order-tab">
+    <div id="order-form">
+      <div class="menu-grid" id="menu-grid"></div>
+
+      <div class="total-bar">
+        총 <span id="count-disp">0</span>개 / 4개
+      </div>
+
+      <div class="sauce-box">
+        <span class="sauce-box-label">🧴 소스 선택 (여러 개 가능)</span>
+        <div class="sauce-chips" id="sauce-chips"></div>
+      </div>
+
+      <div class="special-box">
+        <label>💬 특별 요청사항</label>
+        <textarea id="special-req" rows="2" placeholder="예: 맵지 않게 해주세요, 많이 주세요…"></textarea>
+      </div>
+
+      <button class="order-btn" id="order-btn" onclick="placeOrder()" disabled>
+        🛒 주문하기
+      </button>
+    </div>
+
+    <div id="order-sent">
+      <span class="sent-emoji">🍢</span>
+      <div class="sent-title">주문이 전달됐어요!</div>
+      <div class="sent-sub">사장님이 열심히 준비하고 있어요</div>
+      <div class="dots" style="margin-top:20px;"><span>●</span><span>●</span><span>●</span></div>
+    </div>
+  </div>
+
+  <!-- 주문 내역 탭 -->
+  <div id="customer-history-tab" style="display:none">
+    <div class="history-list" id="customer-history-list"></div>
   </div>
 </div>
 
@@ -345,26 +426,39 @@
     <div class="page-subtitle">사장님, 주문을 확인하세요!</div>
   </div>
 
-  <div id="no-order">
-    <span class="no-order-emoji">🛋️</span>
-    <div class="no-order-txt">아직 주문이 없어요</div>
-    <div class="no-order-sub">손님이 주문하면 여기에 나타나요 <span class="dots"><span>●</span><span>●</span><span>●</span></span></div>
+  <div class="tab-nav">
+    <button class="tab-btn active" id="tab-owner-order"   onclick="switchTab('owner','order')">🔔 주문 확인</button>
+    <button class="tab-btn"        id="tab-owner-history" onclick="switchTab('owner','history')">📋 주문 내역</button>
   </div>
 
-  <div id="new-order">
-    <div class="order-alert">
-      <div class="order-alert-txt">🔔 새 주문이 들어왔어요!</div>
+  <!-- 주문 확인 탭 -->
+  <div id="owner-order-tab">
+    <div id="no-order">
+      <span class="no-order-emoji">🛋️</span>
+      <div class="no-order-txt">아직 주문이 없어요</div>
+      <div class="no-order-sub">손님이 주문하면 여기에 나타나요 <span class="dots"><span>●</span><span>●</span><span>●</span></span></div>
     </div>
-    <div class="order-card" id="order-card"></div>
-    <div class="sauce-card" id="sauce-card" style="display:none">
-      <div class="note-label">🧴 소스</div>
-      <div class="sauce-tags" id="sauce-tags"></div>
+
+    <div id="new-order">
+      <div class="order-alert">
+        <div class="order-alert-txt">🔔 새 주문이 들어왔어요!</div>
+      </div>
+      <div class="order-card" id="order-card"></div>
+      <div class="sauce-card" id="sauce-card" style="display:none">
+        <div class="note-label">🧴 소스</div>
+        <div class="sauce-tags" id="sauce-tags"></div>
+      </div>
+      <div class="note-card" id="note-card" style="display:none">
+        <div class="note-label">💬 특별 요청사항</div>
+        <div class="note-text" id="note-text"></div>
+      </div>
+      <button class="deliver-btn" onclick="completeDelivery()">✅ 배달 완료!</button>
     </div>
-    <div class="note-card" id="note-card" style="display:none">
-      <div class="note-label">💬 특별 요청사항</div>
-      <div class="note-text" id="note-text"></div>
-    </div>
-    <button class="deliver-btn" onclick="completeDelivery()">✅ 배달 완료!</button>
+  </div>
+
+  <!-- 주문 내역 탭 -->
+  <div id="owner-history-tab" style="display:none">
+    <div class="history-list" id="owner-history-list"></div>
   </div>
 </div>
 
@@ -403,9 +497,11 @@
   let doneness = {};   // 고기 메뉴별 익힘: 'rare' | 'medium' | 'well' | null
   let selectedSauces = new Set();
   let role = null;
-  let DB = null; // will hold { db, ref, set, onValue, remove }
+  let DB = null;
   let stopListening = null;
-  let orderPending = false; // 주문을 실제로 보낸 상태인지 추적
+  let historyUnsub = null;
+  let orderPending = false;
+  let tempStars = {};  // 리뷰 임시 별점 저장
 
   MENU.forEach(m => qty[m.id] = 0);
 
@@ -414,7 +510,7 @@ function initFirebase() {
     script.type = 'module';
     script.textContent = `
       import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
-      import { getDatabase, ref, set, onValue, remove } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js';
+      import { getDatabase, ref, set, get, onValue, remove } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js';
 
       const firebaseConfig = {
         apiKey:            "AIzaSyCKGQKH0JyFMzLgFNhxqxksbfud-cBUL48",
@@ -429,7 +525,7 @@ function initFirebase() {
       const app = initializeApp(firebaseConfig);
       const db  = getDatabase(app);
 
-      window.__DB = { db, ref, set, onValue, remove };
+      window.__DB = { db, ref, set, get, onValue, remove };
       document.dispatchEvent(new Event('firebase-ready'));
     `;
     document.head.appendChild(script);
@@ -450,13 +546,24 @@ function initFirebase() {
   }
 
   function goHome() {
-    if (stopListening) { stopListening(); stopListening = null; }
+    if (stopListening)  { stopListening();  stopListening  = null; }
+    if (historyUnsub)   { historyUnsub();   historyUnsub   = null; }
     role = null;
+    tempStars = {};
     document.getElementById('home-screen').style.display = 'flex';
     document.getElementById('customer-page').style.display = 'none';
     document.getElementById('owner-page').style.display = 'none';
     document.getElementById('order-sent').style.display = 'none';
     document.getElementById('order-form').style.display = 'block';
+    // 탭 초기화
+    document.getElementById('customer-order-tab').style.display = 'block';
+    document.getElementById('customer-history-tab').style.display = 'none';
+    document.getElementById('tab-customer-order').classList.add('active');
+    document.getElementById('tab-customer-history').classList.remove('active');
+    document.getElementById('owner-order-tab').style.display = 'block';
+    document.getElementById('owner-history-tab').style.display = 'none';
+    document.getElementById('tab-owner-order').classList.add('active');
+    document.getElementById('tab-owner-history').classList.remove('active');
     MENU.forEach(m => qty[m.id] = 0);
     document.getElementById('special-req').value = '';
   }
@@ -694,7 +801,17 @@ function initFirebase() {
   // ── Complete delivery ──────────────────────────────────
   function completeDelivery() {
     if (!DB) return;
-    DB.remove(DB.ref(DB.db, 'currentOrder'))
+    // 1) 현재 주문 읽기 → 2) history에 저장 → 3) currentOrder 삭제
+    DB.get(DB.ref(DB.db, 'currentOrder'))
+      .then(snap => {
+        const order = snap.val();
+        if (order) {
+          return DB.set(DB.ref(DB.db, `orderHistory/${order.ts}`), {
+            ...order, deliveredAt: Date.now()
+          });
+        }
+      })
+      .then(() => DB.remove(DB.ref(DB.db, 'currentOrder')))
       .then(() => {
         document.getElementById('no-order').style.display = 'block';
         document.getElementById('new-order').style.display = 'none';
@@ -715,6 +832,160 @@ function initFirebase() {
     el.onclick = () => el.remove();
     document.body.appendChild(el);
     setTimeout(() => el.remove(), 3000);
+  }
+
+  // ── Tab switching ───────────────────────────────────────
+  function switchTab(r, tab) {
+    const isHistory = tab === 'history';
+    if (r === 'customer') {
+      document.getElementById('customer-order-tab').style.display   = isHistory ? 'none'  : 'block';
+      document.getElementById('customer-history-tab').style.display = isHistory ? 'block' : 'none';
+      document.getElementById('tab-customer-order').classList.toggle('active', !isHistory);
+      document.getElementById('tab-customer-history').classList.toggle('active', isHistory);
+    } else {
+      document.getElementById('owner-order-tab').style.display   = isHistory ? 'none'  : 'block';
+      document.getElementById('owner-history-tab').style.display = isHistory ? 'block' : 'none';
+      document.getElementById('tab-owner-order').classList.toggle('active', !isHistory);
+      document.getElementById('tab-owner-history').classList.toggle('active', isHistory);
+    }
+    if (isHistory) {
+      loadHistory(r);
+    } else {
+      if (historyUnsub) { historyUnsub(); historyUnsub = null; }
+    }
+  }
+
+  // ── History: load & render ──────────────────────────────
+  function loadHistory(r) {
+    if (!DB) return;
+    if (historyUnsub) { historyUnsub(); historyUnsub = null; }
+    const hRef = DB.ref(DB.db, 'orderHistory');
+    historyUnsub = DB.onValue(hRef, snap => {
+      const data = snap.val();
+      const orders = data
+        ? Object.entries(data).map(([id, o]) => ({ ...o, id })).sort((a, b) => b.ts - a.ts)
+        : [];
+      if (r === 'customer') renderCustomerHistory(orders);
+      else renderOwnerHistory(orders);
+    });
+  }
+
+  function formatTime(ts) {
+    const d = new Date(ts);
+    const pad = n => String(n).padStart(2, '0');
+    return `${d.getMonth()+1}월 ${d.getDate()}일 ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+
+  function historyItemsHtml(items) {
+    return items.map(it => `
+      <div class="order-row">
+        <span class="order-row-emoji">${it.emoji}</span>
+        <div>
+          <div class="order-row-name">
+            ${it.name}
+            <span class="order-row-size">${it.sizeLabel || '🐥 작은꼬치'}</span>
+            ${it.donenessLabel ? `<span class="order-row-doneness">${it.donenessLabel}</span>` : ''}
+          </div>
+          <div class="order-row-qty">${it.quantity}개</div>
+        </div>
+      </div>`).join('');
+  }
+
+  function saucesHtml(sauces) {
+    if (!sauces || sauces.length === 0) return '';
+    return `<div style="display:flex;flex-wrap:wrap;gap:5px;margin:8px 0">
+      ${sauces.map(s => `<span class="sauce-tag" style="font-size:0.75rem;padding:2px 8px">${s.emoji} ${s.name}</span>`).join('')}
+    </div>`;
+  }
+
+  function renderCustomerHistory(orders) {
+    const list = document.getElementById('customer-history-list');
+    if (orders.length === 0) {
+      list.innerHTML = '<div class="history-empty">📭 아직 주문 내역이 없어요</div>';
+      return;
+    }
+    list.innerHTML = orders.map(o => {
+      const rev = o.review;
+      const starsHtml = [1,2,3,4,5].map(n =>
+        `<button class="star-btn" id="star-${o.id}-${n}" onclick="setTempStar('${o.id}',${n})">⭐</button>`
+      ).join('');
+
+      const reviewBlock = rev
+        ? `<div class="review-display">
+             <div class="review-stars-display">${'⭐'.repeat(rev.stars)}</div>
+             ${rev.comment ? `<div class="review-comment-display">"${rev.comment}"</div>` : ''}
+           </div>`
+        : `<div class="star-row" id="stars-${o.id}">${starsHtml}</div>
+           <textarea class="review-textarea" id="rev-text-${o.id}" rows="2" placeholder="맛이 어땠나요? (선택사항)"></textarea>
+           <button class="review-submit-btn" onclick="submitReview('${o.id}')">💌 리뷰 제출하기</button>`;
+
+      return `
+        <div class="history-card">
+          <div class="history-time">🕐 ${formatTime(o.ts)}</div>
+          ${historyItemsHtml(o.items)}
+          ${saucesHtml(o.sauces)}
+          ${o.special ? `<div class="note-card" style="margin-top:8px"><div class="note-label">💬 특별 요청</div><div class="note-text">${o.special}</div></div>` : ''}
+          <div class="review-section">
+            <div class="review-section-label">${rev ? '⭐ 남긴 리뷰' : '⭐ 리뷰 남기기'}</div>
+            ${reviewBlock}
+          </div>
+        </div>`;
+    }).join('');
+
+    // 별점 UI 임시 상태 복원
+    orders.forEach(o => {
+      if (!o.review && tempStars[o.id]) updateStarUI(o.id, tempStars[o.id]);
+    });
+  }
+
+  function renderOwnerHistory(orders) {
+    const list = document.getElementById('owner-history-list');
+    if (orders.length === 0) {
+      list.innerHTML = '<div class="history-empty">📭 아직 주문 내역이 없어요</div>';
+      return;
+    }
+    list.innerHTML = orders.map(o => {
+      const rev = o.review;
+      return `
+        <div class="history-card">
+          <div class="history-time">🕐 ${formatTime(o.ts)}</div>
+          ${historyItemsHtml(o.items)}
+          ${saucesHtml(o.sauces)}
+          ${o.special ? `<div class="note-card" style="margin-top:8px"><div class="note-label">💬 특별 요청</div><div class="note-text">${o.special}</div></div>` : ''}
+          <div class="review-section">
+            <div class="review-section-label">💌 아빠의 리뷰</div>
+            ${rev
+              ? `<div class="review-display">
+                   <div class="review-stars-display">${'⭐'.repeat(rev.stars)}</div>
+                   ${rev.comment ? `<div class="review-comment-display">"${rev.comment}"</div>` : ''}
+                 </div>`
+              : `<div class="no-review-txt">아직 리뷰가 없어요</div>`}
+          </div>
+        </div>`;
+    }).join('');
+  }
+
+  // ── Star rating ─────────────────────────────────────────
+  function setTempStar(orderId, stars) {
+    tempStars[orderId] = stars;
+    updateStarUI(orderId, stars);
+  }
+
+  function updateStarUI(orderId, stars) {
+    for (let i = 1; i <= 5; i++) {
+      const btn = document.getElementById(`star-${orderId}-${i}`);
+      if (btn) btn.classList.toggle('on', i <= stars);
+    }
+  }
+
+  // ── Submit review ───────────────────────────────────────
+  function submitReview(orderId) {
+    if (!DB) return;
+    const stars = tempStars[orderId] || 0;
+    if (stars === 0) { alert('별점을 선택해주세요! ⭐'); return; }
+    const comment = document.getElementById(`rev-text-${orderId}`)?.value.trim() || '';
+    DB.set(DB.ref(DB.db, `orderHistory/${orderId}/review`), { stars, comment, ts: Date.now() })
+      .catch(e => alert('리뷰 저장 실패: ' + e.message));
   }
 </script>
 
