@@ -75,8 +75,25 @@
     }
     .menu-item.selected { border-color: #FF7043; transform: scale(1.02); }
     .menu-emoji { font-size: 2.6rem; display: block; margin-bottom: 5px; }
-    .menu-name { font-size: 0.92rem; font-weight: 700; color: #333; margin-bottom: 10px; }
+    .menu-name { font-size: 0.92rem; font-weight: 700; color: #333; margin-bottom: 8px; }
     .qty-control { display: flex; align-items: center; justify-content: center; gap: 10px; }
+
+    /* ─── SIZE TOGGLE ─── */
+    .size-toggle {
+      display: flex; justify-content: center; gap: 5px;
+      margin-top: 8px;
+      opacity: 0.3; pointer-events: none;
+      transition: opacity 0.2s;
+    }
+    .size-toggle.active { opacity: 1; pointer-events: auto; }
+    .size-btn {
+      flex: 1; padding: 4px 0; border-radius: 8px;
+      border: 1.5px solid #eee; background: white;
+      font-size: 0.75rem; font-weight: 700; color: #aaa;
+      font-family: 'Noto Sans KR', sans-serif;
+      cursor: pointer; transition: all 0.15s;
+    }
+    .size-btn.on { border-color: #FF7043; background: #FFF3E0; color: #E65100; }
     .qty-btn {
       width: 30px; height: 30px; border-radius: 50%; border: none;
       background: #FF7043; color: white; font-size: 1.3rem;
@@ -191,6 +208,12 @@
     .order-row-emoji { font-size: 1.8rem; margin-right: 12px; }
     .order-row-name { font-weight: 700; font-size: 1rem; }
     .order-row-qty { color: #FF7043; font-size: 0.88rem; margin-top: 2px; }
+    .order-row-size {
+      display: inline-block; margin-left: 6px;
+      background: #FFF3E0; color: #E65100;
+      border-radius: 6px; padding: 1px 7px;
+      font-size: 0.75rem; font-weight: 700;
+    }
 
     .note-card {
       background: #FFFDE7; border-radius: 14px;
@@ -353,6 +376,7 @@
   ];
 
   let qty = {};
+  let sizes = {};      // 각 메뉴별 사이즈: 'small' | 'large' | null
   let selectedSauces = new Set();
   let role = null;
   let DB = null; // will hold { db, ref, set, onValue, remove }
@@ -431,6 +455,8 @@ function initFirebase() {
 
   // ── Menu build ─────────────────────────────────────────
   function buildMenu() {
+    sizes = {};
+    MENU.forEach(m => sizes[m.id] = null);
     const grid = document.getElementById('menu-grid');
     grid.innerHTML = MENU.map(m => `
       <div class="menu-item" id="mi-${m.id}">
@@ -441,8 +467,20 @@ function initFirebase() {
           <span class="qty-num" id="qn-${m.id}">0</span>
           <button class="qty-btn" id="plus-${m.id}"  onclick="chg('${m.id}',+1)">+</button>
         </div>
+        <div class="size-toggle" id="sz-${m.id}">
+          <button class="size-btn" id="sz-${m.id}-small" onclick="setSize('${m.id}','small')">🐥 작은꼬치</button>
+          <button class="size-btn" id="sz-${m.id}-large" onclick="setSize('${m.id}','large')">🦁 큰꼬치</button>
+        </div>
       </div>
     `).join('');
+  }
+
+  function setSize(id, size) {
+    sizes[id] = size;
+    ['small','large'].forEach(s => {
+      document.getElementById(`sz-${id}-${s}`)
+        .classList.toggle('on', s === size);
+    });
   }
 
   // ── Sauce build ────────────────────────────────────────
@@ -474,8 +512,16 @@ function initFirebase() {
     if (nq < 0) return;
     if (delta > 0 && total() >= 4) return;
     qty[id] = nq;
+    // 수량이 0이 되면 사이즈 초기화
+    if (nq === 0) {
+      sizes[id] = null;
+      ['small','large'].forEach(s =>
+        document.getElementById(`sz-${id}-${s}`)?.classList.remove('on'));
+    }
     document.getElementById(`qn-${id}`).textContent = nq;
     document.getElementById(`mi-${id}`).classList.toggle('selected', nq > 0);
+    // 수량 > 0 일 때만 사이즈 토글 활성화
+    document.getElementById(`sz-${id}`)?.classList.toggle('active', nq > 0);
     const t = total();
     document.getElementById('count-disp').textContent = t;
     document.getElementById('order-btn').disabled = t === 0;
@@ -490,7 +536,12 @@ function initFirebase() {
     if (!DB) return;
     const items = MENU
       .filter(m => qty[m.id] > 0)
-      .map(m => ({ id: m.id, name: m.name, emoji: m.emoji, quantity: qty[m.id] }));
+      .map(m => ({
+        id: m.id, name: m.name, emoji: m.emoji,
+        quantity: qty[m.id],
+        size: sizes[m.id] || 'small',
+        sizeLabel: sizes[m.id] === 'large' ? '🦁 큰꼬치' : '🐥 작은꼬치'
+      }));
 
     const sauces = SAUCES
       .filter(s => selectedSauces.has(s.id))
@@ -562,7 +613,10 @@ function initFirebase() {
         <div class="order-row">
           <span class="order-row-emoji">${it.emoji}</span>
           <div>
-            <div class="order-row-name">${it.name}</div>
+            <div class="order-row-name">
+              ${it.name}
+              <span class="order-row-size">${it.sizeLabel || '🐥 작은꼬치'}</span>
+            </div>
             <div class="order-row-qty">${it.quantity}개</div>
           </div>
         </div>
