@@ -523,6 +523,10 @@
   <!-- 주문 탭 -->
   <div id="customer-order-tab">
     <div id="order-form">
+      <!-- 최대 주문 수 도달 메시지 -->
+      <div id="order-limit-msg" style="display:none;background:#FFF3E0;border-radius:14px;padding:14px;margin-bottom:14px;text-align:center;font-size:0.92rem;font-weight:700;color:#E65100">
+        ⚠️ 주문이 3개 진행 중이에요! 완료되면 추가 주문할 수 있어요.
+      </div>
       <!-- 가격 안내 배너 -->
       <div style="background:#FFF3E0;border-radius:14px;padding:12px 16px;margin-bottom:14px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
         <span style="font-size:1.3rem">🍢</span>
@@ -581,14 +585,10 @@
       </button>
     </div>
 
-    <div id="order-sent">
-      <span class="sent-emoji" id="sent-emoji">🍢</span>
-      <div class="sent-title" id="sent-title">주문이 전달됐어요!</div>
-      <div class="sent-sub"   id="sent-sub">사장님이 확인 중이에요</div>
-      <div class="dots" style="margin-top:12px;margin-bottom:20px;"><span>●</span><span>●</span><span>●</span></div>
-
-      <!-- 내 주문 요약 -->
-      <div id="my-order-summary" style="text-align:left; width:100%"></div>
+    <!-- 진행 중인 주문 (주문 시 표시) -->
+    <div id="active-orders-wrap" style="display:none; margin-bottom:16px">
+      <div style="font-size:0.88rem;font-weight:900;color:#E65100;margin-bottom:10px">🍢 진행 중인 주문</div>
+      <div id="active-orders-list"></div>
     </div>
   </div>
 
@@ -619,32 +619,7 @@
       <div class="no-order-sub">손님이 주문하면 여기에 나타나요 <span class="dots"><span>●</span><span>●</span><span>●</span></span></div>
     </div>
 
-    <div id="new-order">
-      <div class="order-alert">
-        <div class="order-alert-txt">🔔 새 주문이 들어왔어요!</div>
-      </div>
-      <div class="order-card" id="order-card"></div>
-      <div class="sauce-card" id="sauce-card" style="display:none">
-        <div class="note-label">🧴 소스</div>
-        <div class="sauce-tags" id="sauce-tags"></div>
-      </div>
-      <div class="note-card" id="note-card" style="display:none">
-        <div class="note-label">💬 특별 요청사항</div>
-        <div class="note-text" id="note-text"></div>
-      </div>
-      <!-- 주문 정보 태그 (사장님 화면) -->
-      <div class="order-info-row" id="order-info-row" style="display:none">
-        <span class="order-info-tag" id="oi-type"></span>
-        <span class="order-info-tag" id="oi-payment"></span>
-        <span class="order-info-tag total" id="oi-total"></span>
-      </div>
-
-      <!-- 단계별 버튼 (status에 따라 JS로 표시/숨김) -->
-      <button class="cook-btn"          id="btn-cook"             onclick="startCooking()"     style="display:none">🍳 조리 시작!</button>
-      <button class="deliver-start-btn" id="btn-deliver-start"    onclick="startDelivery()"    style="display:none">🛵 배달 시작!</button>
-      <button class="deliver-btn"       id="btn-deliver-complete" onclick="completeDelivery()" style="display:none">✅ 배달 완료!</button>
-      <button class="cancel-btn"        id="btn-cancel"           onclick="showCancelPanel()"  style="display:none; margin-bottom:30px">❌ 주문 취소</button>
-    </div>
+    <div id="orders-container"></div>
   </div>
 
 
@@ -715,7 +690,8 @@
   let DB = null;
   let stopListening = null;
   let historyUnsub = null;
-  let orderPending = false;
+  let activeOrderIds = new Set(); // 진행 중인 주문 ID Set
+  let cancelTargetId = null;      // 취소할 주문 ID
   let tempStars = {};      // 리뷰 임시 별점 저장
   let selectedReason = null; // 취소 이유 임시 저장
 
@@ -766,10 +742,11 @@ function initFirebase() {
     if (historyUnsub)   { historyUnsub();   historyUnsub   = null; }
     role = null;
     tempStars = {};
+    activeOrderIds = new Set();
+    cancelTargetId = null;
     document.getElementById('home-screen').style.display = 'flex';
     document.getElementById('customer-page').style.display = 'none';
     document.getElementById('owner-page').style.display = 'none';
-    document.getElementById('order-sent').style.display = 'none';
     document.getElementById('order-form').style.display = 'block';
     // 탭 초기화
     document.getElementById('customer-order-tab').style.display = 'block';
@@ -985,12 +962,9 @@ function initFirebase() {
       status: 'pending'
     };
 
-    DB.set(DB.ref(DB.db, 'currentOrder'), order)
+    DB.set(DB.ref(DB.db, `currentOrders/${order.ts}`), order)
       .then(() => {
-        orderPending = true;
-        renderMyOrderSummary(order);
-        document.getElementById('order-form').style.display = 'none';
-        document.getElementById('order-sent').style.display = 'block';
+        resetCustomerForm();
       })
       .catch(e => alert('주문 실패: ' + e.message));
   }
@@ -998,93 +972,114 @@ function initFirebase() {
   // ── Customer: listen for order status changes ──────────
   function listenStatus() {
     if (!DB) return;
-    const r = DB.ref(DB.db, 'currentOrder');
+    let initialized = false;
+    const r = DB.ref(DB.db, 'currentOrders');
     const unsub = DB.onValue(r, snap => {
       if (role !== 'customer') return;
-      const data = snap.val();
+      const data = snap.val() || {};
+      const currentIds = new Set(Object.keys(data));
 
-      // 주문 취소됨
-      if (data && data.status === 'cancelled' && orderPending) {
-        orderPending = false;
-        const reason = data.cancelReason || '취소됐어요';
-        DB.remove(DB.ref(DB.db, 'currentOrder'));
-        resetCustomerForm();
-        showOverlay('😢', '주문이 취소됐어요', reason);
+      if (!initialized) {
+        // 초기 로드: cancelled 주문 정리 후 상태 세팅
+        currentIds.forEach(id => {
+          if (data[id].status === 'cancelled') {
+            DB.remove(DB.ref(DB.db, `currentOrders/${id}`));
+          }
+        });
+        activeOrderIds = new Set(Object.keys(data).filter(id => data[id].status !== 'cancelled'));
+        initialized = true;
+        renderActiveOrders(Object.fromEntries(Object.entries(data).filter(([,o]) => o.status !== 'cancelled')));
+        updateOrderFormState();
         return;
       }
 
-      // 조리 중 / 배달 중 상태 업데이트
-      if (data && data.status === 'cooking' && orderPending) {
-        updateCustomerStatus('cooking');
-        return;
-      }
-      if (data && data.status === 'delivering' && orderPending) {
-        updateCustomerStatus('delivering');
-        return;
-      }
+      // 배달 완료된 주문 감지 (currentOrders에서 사라짐)
+      activeOrderIds.forEach(id => {
+        if (!currentIds.has(id)) {
+          showOverlay('🎉', '배달이 왔어요!', '맛있게 드세요 😋');
+        }
+      });
 
-      // 배달 완료 (주문 사라짐)
-      if (!data && orderPending) {
-        orderPending = false;
-        resetCustomerForm();
-        showOverlay('🎉', '배달이 왔어요!', '맛있게 드세요 😋');
-      }
+      // 취소된 주문 감지
+      currentIds.forEach(id => {
+        const order = data[id];
+        if (order.status === 'cancelled' && activeOrderIds.has(id)) {
+          const reason = order.cancelReason || '취소됐어요';
+          DB.remove(DB.ref(DB.db, `currentOrders/${id}`));
+          showOverlay('😢', '주문이 취소됐어요', reason);
+        }
+      });
+
+      // 상태 업데이트
+      activeOrderIds = new Set(Object.keys(data).filter(id => data[id].status !== 'cancelled'));
+      const validOrders = Object.fromEntries(Object.entries(data).filter(([,o]) => o.status !== 'cancelled'));
+      renderActiveOrders(validOrders);
+      updateOrderFormState();
     });
     stopListening = unsub;
   }
 
-  function updateCustomerStatus(status) {
-    const configs = {
-      pending:    { emoji: '🍢', title: '주문이 전달됐어요!', sub: '사장님이 확인 중이에요' },
-      cooking:    { emoji: '🍳', title: '조리 중이에요!',      sub: '맛있게 만들고 있어요 😋' },
-      delivering: { emoji: '🛵', title: '배달 중이에요!',      sub: '곧 도착해요! 기다려주세요 🎉' },
+  function renderActiveOrders(ordersMap) {
+    const wrap = document.getElementById('active-orders-wrap');
+    const list = document.getElementById('active-orders-list');
+    const orders = Object.entries(ordersMap).sort(([,a],[,b]) => a.ts - b.ts);
+
+    if (orders.length === 0) {
+      wrap.style.display = 'none';
+      list.innerHTML = '';
+      return;
+    }
+
+    const statusCfg = {
+      pending:    { emoji: '🍢', label: '확인 중',  color: '#FF7043', bg: '#FFF3E0' },
+      cooking:    { emoji: '🍳', label: '조리 중',  color: '#F57C00', bg: '#FFF8E1' },
+      delivering: { emoji: '🛵', label: '배달 중',  color: '#1565C0', bg: '#E3F2FD' },
     };
-    const c = configs[status] || configs.pending;
-    document.getElementById('sent-emoji').textContent = c.emoji;
-    document.getElementById('sent-title').textContent = c.title;
-    document.getElementById('sent-sub').textContent   = c.sub;
+
+    list.innerHTML = orders.map(([id, order]) => {
+      const sc = statusCfg[order.status] || statusCfg.pending;
+      const itemSummary = order.items.map(it =>
+        `${it.emoji} ${it.name} <span style="color:#FF7043;font-weight:700">${it.quantity}개</span>`
+      ).join(' &nbsp;·&nbsp; ');
+      const sauceHtml = order.sauces && order.sauces.length > 0
+        ? `<div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px">
+            ${order.sauces.map(s=>`<span style="background:#FF7043;color:white;border-radius:10px;padding:2px 8px;font-size:0.75rem;font-weight:700">${s.emoji}${s.name}</span>`).join('')}
+           </div>` : '';
+      return `
+        <div style="background:white;border-radius:14px;padding:14px;margin-bottom:10px;box-shadow:0 2px 8px rgba(0,0,0,0.07)">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+            <span style="font-size:0.76rem;color:#bbb;font-weight:700">${formatTime(order.ts)}</span>
+            <span style="background:${sc.bg};color:${sc.color};border-radius:20px;padding:3px 12px;font-size:0.78rem;font-weight:700">${sc.emoji} ${sc.label}</span>
+          </div>
+          <div style="font-size:0.88rem;color:#444;line-height:1.7">${itemSummary}</div>
+          ${sauceHtml}
+          <div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:8px">
+            ${order.orderTypeLabel ? `<span style="background:#E3F2FD;color:#1565C0;border-radius:7px;padding:2px 8px;font-size:0.76rem;font-weight:700">${order.orderTypeLabel}</span>` : ''}
+            ${order.paymentMethodLabel ? `<span style="background:#E8F5E9;color:#2E7D32;border-radius:7px;padding:2px 8px;font-size:0.76rem;font-weight:700">${order.paymentMethodLabel}</span>` : ''}
+            ${order.price ? `<span style="background:#FFF3E0;color:#E65100;border-radius:7px;padding:2px 8px;font-size:0.78rem;font-weight:700">${won(order.price.total)}</span>` : ''}
+          </div>
+        </div>`;
+    }).join('');
+
+    wrap.style.display = 'block';
   }
 
-  function renderMyOrderSummary(order) {
-    const el = document.getElementById('my-order-summary');
-    if (!el) return;
-
-    const itemsHtml = order.items.map(it => `
-      <div style="display:flex;align-items:center;padding:8px 0;border-bottom:1px solid #f5f5f5">
-        <span style="font-size:1.6rem;margin-right:10px">${it.emoji}</span>
-        <div style="flex:1">
-          <div style="font-weight:700;font-size:0.92rem;color:#333">
-            ${it.name}
-            <span style="background:#FFF3E0;color:#E65100;border-radius:6px;padding:1px 7px;font-size:0.72rem;font-weight:700;margin-left:4px">${it.sizeLabel || '🐥 작은꼬치'}</span>
-            ${it.donenessLabel ? `<span style="background:#FBE9E7;color:#BF360C;border-radius:6px;padding:1px 7px;font-size:0.72rem;font-weight:700;margin-left:2px">${it.donenessLabel}</span>` : ''}
-          </div>
-          <div style="font-size:0.82rem;color:#FF7043;margin-top:2px">${it.quantity}개</div>
-        </div>
-      </div>`).join('');
-
-    const saucesHtml = order.sauces && order.sauces.length > 0
-      ? `<div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:10px">
-           ${order.sauces.map(s => `<span style="background:#FF7043;color:white;border-radius:12px;padding:3px 10px;font-size:0.78rem;font-weight:700">${s.emoji} ${s.name}</span>`).join('')}
-         </div>` : '';
-
-    const infoHtml = `
-      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;padding-top:10px;border-top:1px solid #f5f5f5">
-        <span style="background:#E3F2FD;color:#1565C0;border-radius:8px;padding:3px 10px;font-size:0.78rem;font-weight:700">${order.orderTypeLabel || ''}</span>
-        <span style="background:#E8F5E9;color:#2E7D32;border-radius:8px;padding:3px 10px;font-size:0.78rem;font-weight:700">${order.paymentMethodLabel || ''}</span>
-        ${order.price ? `<span style="background:#FFF3E0;color:#E65100;border-radius:8px;padding:3px 10px;font-size:0.82rem;font-weight:900">${won(order.price.total)}</span>` : ''}
-      </div>`;
-
-    el.innerHTML = `
-      <div style="background:white;border-radius:16px;padding:16px;box-shadow:0 2px 10px rgba(0,0,0,0.07);margin-bottom:8px">
-        <div style="font-size:0.82rem;font-weight:900;color:#888;margin-bottom:8px">📋 내 주문 내역</div>
-        ${itemsHtml}
-        ${saucesHtml}
-        ${infoHtml}
-      </div>`;
+  function updateOrderFormState() {
+    const count = activeOrderIds.size;
+    const limitMsg = document.getElementById('order-limit-msg');
+    const form = document.getElementById('order-form');
+    if (count >= 3) {
+      limitMsg.style.display = 'block';
+      form.style.opacity = '0.45';
+      form.style.pointerEvents = 'none';
+    } else {
+      limitMsg.style.display = 'none';
+      form.style.opacity = '1';
+      form.style.pointerEvents = 'auto';
+    }
   }
 
   function resetCustomerForm() {
-    document.getElementById('order-sent').style.display = 'none';
     document.getElementById('order-form').style.display = 'block';
     MENU.forEach(m => qty[m.id] = 0);
     document.getElementById('special-req').value = '';
@@ -1094,8 +1089,6 @@ function initFirebase() {
     buildSauces();
     document.getElementById('count-disp').textContent = '0';
     document.getElementById('order-btn').disabled = true;
-    const summary = document.getElementById('my-order-summary');
-    if (summary) summary.innerHTML = '';
     // 옵션 칩 초기화
     document.getElementById('ot-pickup').classList.remove('on');
     document.getElementById('ot-delivery').classList.add('on');
@@ -1107,30 +1100,35 @@ function initFirebase() {
   // ── Owner: listen for new orders ──────────────────────
   function listenOrders() {
     if (!DB) return;
-    const r = DB.ref(DB.db, 'currentOrder');
+    const r = DB.ref(DB.db, 'currentOrders');
     const unsub = DB.onValue(r, snap => {
       if (role !== 'owner') return;
-      const data = snap.val();
-      if (data && data.status === 'cancelled') {
-        // 취소 처리 완료 → no-order 상태로 복귀
+      const data = snap.val() || {};
+      const activeOrders = Object.entries(data)
+        .filter(([,o]) => o.status !== 'cancelled')
+        .sort(([,a],[,b]) => a.ts - b.ts);
+
+      if (activeOrders.length === 0) {
         document.getElementById('no-order').style.display = 'block';
-        document.getElementById('new-order').style.display = 'none';
-      } else if (data && data.items && data.items.length > 0) {
-        renderOrder(data);
-        document.getElementById('no-order').style.display = 'none';
-        document.getElementById('new-order').style.display = 'block';
+        document.getElementById('orders-container').innerHTML = '';
       } else {
-        document.getElementById('no-order').style.display = 'block';
-        document.getElementById('new-order').style.display = 'none';
+        document.getElementById('no-order').style.display = 'none';
+        renderOrders(Object.fromEntries(activeOrders));
       }
     });
     stopListening = unsub;
   }
 
-  function renderOrder(data) {
-    const card = document.getElementById('order-card');
-    card.innerHTML = '<div class="order-card-title">📋 주문 내역</div>' +
-      data.items.map(it => `
+  function renderOrders(ordersMap) {
+    const container = document.getElementById('orders-container');
+    const orders = Object.entries(ordersMap).sort(([,a],[,b]) => a.ts - b.ts);
+
+    const alertMsgs = { pending: '🔔 새 주문', cooking: '🍳 조리 중', delivering: '🛵 배달 중' };
+    const alertColors = { pending: '#43A047', cooking: '#F57C00', delivering: '#1565C0' };
+
+    container.innerHTML = orders.map(([id, data]) => {
+      const status = data.status || 'pending';
+      const itemsHtml = data.items.map(it => `
         <div class="order-row">
           <span class="order-row-emoji">${it.emoji}</span>
           <div>
@@ -1141,103 +1139,83 @@ function initFirebase() {
             </div>
             <div class="order-row-qty">${it.quantity}개</div>
           </div>
-        </div>
-      `).join('');
+        </div>`).join('');
 
-    const sauceCard = document.getElementById('sauce-card');
-    if (data.sauces && data.sauces.length > 0) {
-      sauceCard.style.display = 'block';
-      document.getElementById('sauce-tags').innerHTML =
-        data.sauces.map(s => `<span class="sauce-tag">${s.emoji} ${s.name}</span>`).join('');
-    } else {
-      sauceCard.style.display = 'none';
-    }
+      const sauceHtml = data.sauces && data.sauces.length > 0
+        ? `<div class="sauce-card" style="margin-bottom:10px">
+            <div class="note-label">🧴 소스</div>
+            <div class="sauce-tags">${data.sauces.map(s=>`<span class="sauce-tag">${s.emoji} ${s.name}</span>`).join('')}</div>
+           </div>` : '';
 
-    const noteCard = document.getElementById('note-card');
-    if (data.special) {
-      noteCard.style.display = 'block';
-      document.getElementById('note-text').textContent = data.special;
-    } else {
-      noteCard.style.display = 'none';
-    }
+      const noteHtml = data.special
+        ? `<div class="note-card" style="margin-bottom:10px">
+            <div class="note-label">💬 특별 요청사항</div>
+            <div class="note-text">${data.special}</div>
+           </div>` : '';
 
-    // 가격 / 주문방식 / 결제방식 태그
-    const infoRow = document.getElementById('order-info-row');
-    if (data.price || data.orderTypeLabel || data.paymentMethodLabel) {
-      infoRow.style.display = 'flex';
-      const otTag = document.getElementById('oi-type');
-      otTag.textContent = data.orderTypeLabel || '';
-      otTag.className = 'order-info-tag ' + (data.orderType === 'delivery' ? 'delivery' : '');
+      const infoHtml = (data.price || data.orderTypeLabel || data.paymentMethodLabel)
+        ? `<div class="order-info-row">
+            ${data.orderTypeLabel ? `<span class="order-info-tag ${data.orderType==='delivery'?'delivery':''}">${data.orderTypeLabel}</span>` : ''}
+            ${data.paymentMethodLabel ? `<span class="order-info-tag payment">${data.paymentMethodLabel}</span>` : ''}
+            ${data.price ? `<span class="order-info-tag total">${won(data.price.total)}</span>` : ''}
+           </div>` : '';
 
-      const pmTag = document.getElementById('oi-payment');
-      pmTag.textContent = data.paymentMethodLabel || '';
-      pmTag.className = 'order-info-tag payment';
+      const btnHtml = `
+        ${status==='pending'    ? `<button class="cook-btn"          onclick="startCooking('${id}')">🍳 조리 시작!</button>` : ''}
+        ${status==='cooking'    ? `<button class="deliver-start-btn" onclick="startDelivery('${id}')">🛵 배달 시작!</button>` : ''}
+        ${status==='delivering' ? `<button class="deliver-btn"       onclick="completeDelivery('${id}')">✅ 배달 완료!</button>` : ''}
+        ${(status==='pending'||status==='cooking') ? `<button class="cancel-btn" style="margin-bottom:8px" onclick="showCancelPanel('${id}')">❌ 주문 취소</button>` : ''}`;
 
-      const totTag = document.getElementById('oi-total');
-      totTag.textContent = data.price ? won(data.price.total) : '';
-      totTag.className = 'order-info-tag total';
-    } else {
-      infoRow.style.display = 'none';
-    }
-
-    // 주문 상태에 따라 알림 배너 + 버튼 업데이트
-    const status = data.status || 'pending';
-    const alertMsgs = {
-      pending:    '🔔 새 주문이 들어왔어요!',
-      cooking:    '🍳 조리 중이에요!',
-      delivering: '🛵 배달 중이에요!'
-    };
-    document.querySelector('.order-alert-txt').textContent = alertMsgs[status] || alertMsgs.pending;
-
-    const show = (id, visible) => document.getElementById(id).style.display = visible ? 'block' : 'none';
-    show('btn-cook',             status === 'pending');
-    show('btn-deliver-start',    status === 'cooking');
-    show('btn-deliver-complete', status === 'delivering');
-    show('btn-cancel',           status === 'pending' || status === 'cooking');
+      return `
+        <div style="margin-bottom:20px">
+          <div class="order-alert" style="background:linear-gradient(135deg,${alertColors[status]||'#43A047'},${alertColors[status]||'#388E3C'}dd);margin-bottom:10px">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <div class="order-alert-txt">${alertMsgs[status] || alertMsgs.pending}</div>
+              <div style="font-size:0.78rem;opacity:0.85">${formatTime(data.ts)}</div>
+            </div>
+          </div>
+          <div class="order-card">${itemsHtml}</div>
+          ${sauceHtml}${noteHtml}${infoHtml}
+          <div style="margin-top:12px">${btnHtml}</div>
+        </div>`;
+    }).join('');
   }
 
   // ── Step buttons ───────────────────────────────────────
-  function startCooking() {
+  function startCooking(id) {
     if (!DB) return;
-    DB.get(DB.ref(DB.db, 'currentOrder'))
+    DB.get(DB.ref(DB.db, `currentOrders/${id}`))
       .then(snap => {
         const order = snap.val();
         if (!order) return;
-        return DB.set(DB.ref(DB.db, 'currentOrder'), { ...order, status: 'cooking' });
+        return DB.set(DB.ref(DB.db, `currentOrders/${id}`), { ...order, status: 'cooking' });
       })
       .catch(e => alert('오류: ' + e.message));
   }
 
-  function startDelivery() {
+  function startDelivery(id) {
     if (!DB) return;
-    DB.get(DB.ref(DB.db, 'currentOrder'))
+    DB.get(DB.ref(DB.db, `currentOrders/${id}`))
       .then(snap => {
         const order = snap.val();
         if (!order) return;
-        return DB.set(DB.ref(DB.db, 'currentOrder'), { ...order, status: 'delivering' });
+        return DB.set(DB.ref(DB.db, `currentOrders/${id}`), { ...order, status: 'delivering' });
       })
       .catch(e => alert('오류: ' + e.message));
   }
 
   // ── Complete delivery ──────────────────────────────────
-  function completeDelivery() {
+  function completeDelivery(id) {
     if (!DB) return;
-    // 1) 현재 주문 읽기 → 2) history에 저장 → 3) currentOrder 삭제
-    DB.get(DB.ref(DB.db, 'currentOrder'))
+    DB.get(DB.ref(DB.db, `currentOrders/${id}`))
       .then(snap => {
         const order = snap.val();
         if (order) {
-          return DB.set(DB.ref(DB.db, `orderHistory/${order.ts}`), {
-            ...order, deliveredAt: Date.now()
-          });
+          return DB.set(DB.ref(DB.db, `orderHistory/${order.ts}`), { ...order, deliveredAt: Date.now() });
         }
       })
-      .then(() => DB.remove(DB.ref(DB.db, 'currentOrder')))
-      .then(() => {
-        document.getElementById('no-order').style.display = 'block';
-        document.getElementById('new-order').style.display = 'none';
-        showOverlay('✅', '배달 완료!', '최고의 사장님이에요 🌟');
-      })
+      .then(() => DB.remove(DB.ref(DB.db, `currentOrders/${id}`)))
+      .then(() => showOverlay('✅', '배달 완료!', '최고의 사장님이에요 🌟'))
       .catch(e => alert('오류: ' + e.message));
   }
 
@@ -1256,7 +1234,8 @@ function initFirebase() {
   }
 
   // ── Cancel panel ───────────────────────────────────────
-  function showCancelPanel() {
+  function showCancelPanel(id) {
+    cancelTargetId = id;
     selectedReason = null;
     document.getElementById('custom-reason-input').value = '';
     document.getElementById('custom-reason-input').classList.remove('show');
@@ -1301,12 +1280,12 @@ function initFirebase() {
   }
 
   function confirmCancel() {
-    if (!DB || !selectedReason) return;
-    DB.get(DB.ref(DB.db, 'currentOrder'))
+    if (!DB || !selectedReason || !cancelTargetId) return;
+    DB.get(DB.ref(DB.db, `currentOrders/${cancelTargetId}`))
       .then(snap => {
         const order = snap.val();
         if (!order) return;
-        return DB.set(DB.ref(DB.db, 'currentOrder'), {
+        return DB.set(DB.ref(DB.db, `currentOrders/${cancelTargetId}`), {
           ...order,
           status: 'cancelled',
           cancelReason: selectedReason,
@@ -1316,6 +1295,7 @@ function initFirebase() {
       .then(() => {
         hideCancelPanel();
         showOverlay('❌', '주문을 취소했어요', selectedReason);
+        cancelTargetId = null;
       })
       .catch(e => alert('취소 실패: ' + e.message));
   }
