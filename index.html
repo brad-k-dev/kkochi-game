@@ -485,7 +485,7 @@
   <button class="back-btn" onclick="goHome()">← 처음으로</button>
   <div class="page-header">
     <div class="page-title">🍢 꼬치 주문</div>
-    <div class="page-subtitle">먹고 싶은 꼬치를 골라주세요! (최대 4개)</div>
+    <div class="page-subtitle">먹고 싶은 꼬치를 골라주세요! (최대 7개)</div>
   </div>
 
   <div class="tab-nav">
@@ -511,7 +511,7 @@
       <div class="menu-grid" id="menu-grid"></div>
 
       <div class="total-bar">
-        총 <span id="count-disp">0</span>개 / 4개
+        총 <span id="count-disp">0</span>개 / 7개
       </div>
 
       <div class="sauce-box">
@@ -886,7 +886,7 @@ function initFirebase() {
   function chg(id, delta) {
     const nq = qty[id] + delta;
     if (nq < 0) return;
-    if (delta > 0 && total() >= 4) return;
+    if (delta > 0 && total() >= 7) return;
     qty[id] = nq;
     // 수량이 0이 되면 사이즈 & 익힘 초기화
     if (nq === 0) {
@@ -907,7 +907,7 @@ function initFirebase() {
     document.getElementById('order-btn').disabled = t === 0;
     MENU.forEach(m => {
       const b = document.getElementById(`plus-${m.id}`);
-      if (b) b.disabled = t >= 4;
+      if (b) b.disabled = t >= 7;
     });
     updatePriceSummary();
   }
