@@ -272,6 +272,71 @@
     }
     .deliver-btn:hover { transform: translateY(-2px); }
 
+    /* ─── CANCEL BUTTON ─── */
+    .cancel-btn {
+      width: 100%; padding: 14px;
+      background: white; color: #e53935;
+      border: 2px solid #ffcdd2; border-radius: 16px;
+      font-size: 1rem; font-weight: 700;
+      font-family: 'Noto Sans KR', sans-serif;
+      cursor: pointer; transition: background 0.15s;
+      margin-bottom: 30px;
+    }
+    .cancel-btn:hover { background: #fff5f5; }
+
+    /* ─── CANCEL BOTTOM SHEET ─── */
+    .sheet-backdrop {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+      z-index: 1000; display: none; align-items: flex-end;
+    }
+    .sheet-backdrop.open { display: flex; }
+    .sheet {
+      background: white; border-radius: 24px 24px 0 0;
+      padding: 24px 20px 40px; width: 100%;
+      animation: slideUp 0.25s ease;
+    }
+    @keyframes slideUp { from{transform:translateY(100%);} to{transform:translateY(0);} }
+    .sheet-handle {
+      width: 40px; height: 4px; background: #ddd;
+      border-radius: 2px; margin: 0 auto 20px;
+    }
+    .sheet-title {
+      font-size: 1.1rem; font-weight: 900; color: #333;
+      text-align: center; margin-bottom: 18px;
+    }
+    .reason-chips {
+      display: grid; grid-template-columns: repeat(2, 1fr);
+      gap: 10px; margin-bottom: 16px;
+    }
+    .reason-chip {
+      padding: 12px 8px; border-radius: 12px;
+      border: 2px solid #eee; background: white;
+      font-size: 0.88rem; font-weight: 700; color: #888;
+      font-family: 'Noto Sans KR', sans-serif;
+      cursor: pointer; transition: all 0.15s; text-align: center;
+    }
+    .reason-chip.on { border-color: #e53935; background: #fff5f5; color: #e53935; }
+    .reason-custom-input {
+      width: 100%; border: 2px solid #eee; border-radius: 10px;
+      padding: 10px; font-size: 0.9rem; outline: none;
+      font-family: 'Noto Sans KR', sans-serif;
+      margin-bottom: 14px; display: none;
+    }
+    .reason-custom-input.show { display: block; }
+    .reason-custom-input:focus { border-color: #e53935; }
+    .sheet-confirm-btn {
+      width: 100%; padding: 16px; background: #e53935; color: white;
+      border: none; border-radius: 14px; font-size: 1rem; font-weight: 900;
+      font-family: 'Noto Sans KR', sans-serif; cursor: pointer;
+      margin-bottom: 10px;
+    }
+    .sheet-confirm-btn:disabled { background: #ccc; cursor: not-allowed; }
+    .sheet-close-btn {
+      width: 100%; padding: 12px; background: none; color: #aaa;
+      border: none; font-size: 0.9rem; font-weight: 700;
+      font-family: 'Noto Sans KR', sans-serif; cursor: pointer;
+    }
+
     /* ─── TAB NAV ─── */
     .tab-nav {
       display: flex; gap: 0; margin-bottom: 20px;
@@ -453,12 +518,35 @@
         <div class="note-text" id="note-text"></div>
       </div>
       <button class="deliver-btn" onclick="completeDelivery()">✅ 배달 완료!</button>
+      <button class="cancel-btn"  onclick="showCancelPanel()">❌ 주문 취소</button>
     </div>
   </div>
+
 
   <!-- 주문 내역 탭 -->
   <div id="owner-history-tab" style="display:none">
     <div class="history-list" id="owner-history-list"></div>
+  </div>
+</div>
+
+<!-- ════════ CANCEL SHEET ════════ -->
+<div class="sheet-backdrop" id="cancel-backdrop" onclick="handleBackdropClick(event)">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-title">주문을 취소하시겠어요? 😢</div>
+    <div class="reason-chips" id="reason-chips">
+      <button class="reason-chip" onclick="selectReason('품절이에요 😢')">품절이에요 😢</button>
+      <button class="reason-chip" onclick="selectReason('재료가 없어요 🥲')">재료가 없어요 🥲</button>
+      <button class="reason-chip" onclick="selectReason('잠깐 쉬는 중이에요 💤')">잠깐 쉬는 중이에요 💤</button>
+      <button class="reason-chip" onclick="selectReason('준비가 안 됐어요 🔧')">준비가 안 됐어요 🔧</button>
+      <button class="reason-chip" id="chip-custom" onclick="selectReason('custom')">기타 ✏️</button>
+    </div>
+    <input class="reason-custom-input" id="custom-reason-input"
+           placeholder="취소 이유를 직접 입력해주세요" oninput="onCustomInput()" />
+    <button class="sheet-confirm-btn" id="cancel-confirm-btn" onclick="confirmCancel()" disabled>
+      주문 취소하기
+    </button>
+    <button class="sheet-close-btn" onclick="hideCancelPanel()">닫기</button>
   </div>
 </div>
 
@@ -501,7 +589,8 @@
   let stopListening = null;
   let historyUnsub = null;
   let orderPending = false;
-  let tempStars = {};  // 리뷰 임시 별점 저장
+  let tempStars = {};      // 리뷰 임시 별점 저장
+  let selectedReason = null; // 취소 이유 임시 저장
 
   MENU.forEach(m => qty[m.id] = 0);
 
@@ -721,27 +810,44 @@ function initFirebase() {
       .catch(e => alert('주문 실패: ' + e.message));
   }
 
-  // ── Customer: listen for order cleared (= delivered) ──
+  // ── Customer: listen for order status changes ──────────
   function listenStatus() {
     if (!DB) return;
     const r = DB.ref(DB.db, 'currentOrder');
     const unsub = DB.onValue(r, snap => {
       if (role !== 'customer') return;
-      if (!snap.val() && orderPending) {
-        // 실제로 주문을 보낸 상태에서 주문이 사라졌을 때만 알림
+      const data = snap.val();
+
+      // 주문 취소됨
+      if (data && data.status === 'cancelled' && orderPending) {
         orderPending = false;
-        document.getElementById('order-sent').style.display = 'none';
-        document.getElementById('order-form').style.display = 'block';
-        MENU.forEach(m => qty[m.id] = 0);
-        document.getElementById('special-req').value = '';
-        buildMenu();
-        buildSauces();
-        document.getElementById('count-disp').textContent = '0';
-        document.getElementById('order-btn').disabled = true;
+        const reason = data.cancelReason || '취소됐어요';
+        // 취소 처리 후 currentOrder 삭제
+        DB.remove(DB.ref(DB.db, 'currentOrder'));
+        resetCustomerForm();
+        showOverlay('😢', '주문이 취소됐어요', reason);
+        return;
+      }
+
+      // 배달 완료 (주문 사라짐)
+      if (!data && orderPending) {
+        orderPending = false;
+        resetCustomerForm();
         showOverlay('🎉', '배달이 왔어요!', '맛있게 드세요 😋');
       }
     });
     stopListening = unsub;
+  }
+
+  function resetCustomerForm() {
+    document.getElementById('order-sent').style.display = 'none';
+    document.getElementById('order-form').style.display = 'block';
+    MENU.forEach(m => qty[m.id] = 0);
+    document.getElementById('special-req').value = '';
+    buildMenu();
+    buildSauces();
+    document.getElementById('count-disp').textContent = '0';
+    document.getElementById('order-btn').disabled = true;
   }
 
   // ── Owner: listen for new orders ──────────────────────
@@ -751,7 +857,11 @@ function initFirebase() {
     const unsub = DB.onValue(r, snap => {
       if (role !== 'owner') return;
       const data = snap.val();
-      if (data && data.items && data.items.length > 0) {
+      if (data && data.status === 'cancelled') {
+        // 취소 처리 완료 → no-order 상태로 복귀
+        document.getElementById('no-order').style.display = 'block';
+        document.getElementById('new-order').style.display = 'none';
+      } else if (data && data.items && data.items.length > 0) {
         renderOrder(data);
         document.getElementById('no-order').style.display = 'none';
         document.getElementById('new-order').style.display = 'block';
@@ -832,6 +942,71 @@ function initFirebase() {
     el.onclick = () => el.remove();
     document.body.appendChild(el);
     setTimeout(() => el.remove(), 3000);
+  }
+
+  // ── Cancel panel ───────────────────────────────────────
+  function showCancelPanel() {
+    selectedReason = null;
+    document.getElementById('custom-reason-input').value = '';
+    document.getElementById('custom-reason-input').classList.remove('show');
+    document.getElementById('cancel-confirm-btn').disabled = true;
+    document.querySelectorAll('.reason-chip').forEach(c => c.classList.remove('on'));
+    document.getElementById('cancel-backdrop').classList.add('open');
+  }
+
+  function hideCancelPanel() {
+    document.getElementById('cancel-backdrop').classList.remove('open');
+    selectedReason = null;
+  }
+
+  function handleBackdropClick(e) {
+    if (e.target === document.getElementById('cancel-backdrop')) hideCancelPanel();
+  }
+
+  function selectReason(reason) {
+    document.querySelectorAll('.reason-chip').forEach(c => c.classList.remove('on'));
+    const customInput = document.getElementById('custom-reason-input');
+
+    if (reason === 'custom') {
+      document.getElementById('chip-custom').classList.add('on');
+      customInput.classList.add('show');
+      customInput.focus();
+      selectedReason = customInput.value.trim() || null;
+    } else {
+      // 해당 버튼 찾아서 활성화
+      document.querySelectorAll('.reason-chip').forEach(c => {
+        if (c.textContent.trim() === reason) c.classList.add('on');
+      });
+      customInput.classList.remove('show');
+      selectedReason = reason;
+    }
+    document.getElementById('cancel-confirm-btn').disabled = !selectedReason;
+  }
+
+  function onCustomInput() {
+    const val = document.getElementById('custom-reason-input').value.trim();
+    selectedReason = val || null;
+    document.getElementById('cancel-confirm-btn').disabled = !selectedReason;
+  }
+
+  function confirmCancel() {
+    if (!DB || !selectedReason) return;
+    DB.get(DB.ref(DB.db, 'currentOrder'))
+      .then(snap => {
+        const order = snap.val();
+        if (!order) return;
+        return DB.set(DB.ref(DB.db, 'currentOrder'), {
+          ...order,
+          status: 'cancelled',
+          cancelReason: selectedReason,
+          cancelledAt: Date.now()
+        });
+      })
+      .then(() => {
+        hideCancelPanel();
+        showOverlay('❌', '주문을 취소했어요', selectedReason);
+      })
+      .catch(e => alert('취소 실패: ' + e.message));
   }
 
   // ── Tab switching ───────────────────────────────────────
