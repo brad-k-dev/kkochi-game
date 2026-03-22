@@ -690,8 +690,10 @@
   let DB = null;
   let stopListening = null;
   let historyUnsub = null;
-  let activeOrderIds = new Set(); // 진행 중인 주문 ID Set
-  let cancelTargetId = null;      // 취소할 주문 ID
+  let activeOrderIds = new Set();  // 진행 중인 주문 ID Set
+  let cancelTargetId = null;       // 취소할 주문 ID
+  let activeOrdersCache = {};      // id → order 데이터 (완료 시 타입 확인용)
+  let notifiedReadyOrders = new Set(); // '픽업 가능' 알림 보낸 주문 ID
   let tempStars = {};      // 리뷰 임시 별점 저장
   let selectedReason = null; // 취소 이유 임시 저장
 
@@ -744,6 +746,8 @@ function initFirebase() {
     tempStars = {};
     activeOrderIds = new Set();
     cancelTargetId = null;
+    activeOrdersCache = {};
+    notifiedReadyOrders = new Set();
     document.getElementById('home-screen').style.display = 'flex';
     document.getElementById('customer-page').style.display = 'none';
     document.getElementById('owner-page').style.display = 'none';
@@ -993,10 +997,26 @@ function initFirebase() {
         return;
       }
 
-      // 배달 완료된 주문 감지 (currentOrders에서 사라짐)
+      // 완료된 주문 감지 (currentOrders에서 사라짐)
       activeOrderIds.forEach(id => {
         if (!currentIds.has(id)) {
-          showOverlay('🎉', '배달이 왔어요!', '맛있게 드세요 😋');
+          const isPickup = activeOrdersCache[id]?.orderType === 'pickup';
+          if (isPickup) {
+            showOverlay('🛎️', '픽업 완료됐어요!', '맛있게 드세요 😋');
+          } else {
+            showOverlay('🎉', '배달이 왔어요!', '맛있게 드세요 😋');
+          }
+          delete activeOrdersCache[id];
+          notifiedReadyOrders.delete(id);
+        }
+      });
+
+      // 픽업 가능 알림 감지 (status = 'ready')
+      currentIds.forEach(id => {
+        const order = data[id];
+        if (order.status === 'ready' && activeOrderIds.has(id) && !notifiedReadyOrders.has(id)) {
+          notifiedReadyOrders.add(id);
+          showOverlay('🛎️', '픽업 가능해요!', '음식을 찾아가세요 🏃');
         }
       });
 
@@ -1031,10 +1051,14 @@ function initFirebase() {
     }
 
     const statusCfg = {
-      pending:    { emoji: '🍢', label: '확인 중',  color: '#FF7043', bg: '#FFF3E0' },
-      cooking:    { emoji: '🍳', label: '조리 중',  color: '#F57C00', bg: '#FFF8E1' },
-      delivering: { emoji: '🛵', label: '배달 중',  color: '#1565C0', bg: '#E3F2FD' },
+      pending:    { emoji: '🍢', label: '확인 중',    color: '#FF7043', bg: '#FFF3E0' },
+      cooking:    { emoji: '🍳', label: '조리 중',    color: '#F57C00', bg: '#FFF8E1' },
+      delivering: { emoji: '🛵', label: '배달 중',    color: '#1565C0', bg: '#E3F2FD' },
+      ready:      { emoji: '🛎️', label: '픽업 가능!', color: '#6A1B9A', bg: '#F3E5F5' },
     };
+
+    // 캐시 업데이트
+    orders.forEach(([id, order]) => { activeOrdersCache[id] = order; });
 
     list.innerHTML = orders.map(([id, order]) => {
       const sc = statusCfg[order.status] || statusCfg.pending;
@@ -1123,8 +1147,8 @@ function initFirebase() {
     const container = document.getElementById('orders-container');
     const orders = Object.entries(ordersMap).sort(([,a],[,b]) => a.ts - b.ts);
 
-    const alertMsgs = { pending: '🔔 새 주문', cooking: '🍳 조리 중', delivering: '🛵 배달 중' };
-    const alertColors = { pending: '#43A047', cooking: '#F57C00', delivering: '#1565C0' };
+    const alertMsgs   = { pending: '🔔 새 주문', cooking: '🍳 조리 중', delivering: '🛵 배달 중', ready: '🛎️ 픽업 가능!' };
+    const alertColors = { pending: '#43A047',   cooking: '#F57C00',   delivering: '#1565C0',   ready: '#6A1B9A' };
 
     container.innerHTML = orders.map(([id, data]) => {
       const status = data.status || 'pending';
@@ -1160,10 +1184,13 @@ function initFirebase() {
             ${data.price ? `<span class="order-info-tag total">${won(data.price.total)}</span>` : ''}
            </div>` : '';
 
+      const isPickup = data.orderType === 'pickup';
       const btnHtml = `
-        ${status==='pending'    ? `<button class="cook-btn"          onclick="startCooking('${id}')">🍳 조리 시작!</button>` : ''}
-        ${status==='cooking'    ? `<button class="deliver-start-btn" onclick="startDelivery('${id}')">🛵 배달 시작!</button>` : ''}
-        ${status==='delivering' ? `<button class="deliver-btn"       onclick="completeDelivery('${id}')">✅ 배달 완료!</button>` : ''}
+        ${status==='pending'    ? `<button class="cook-btn" onclick="startCooking('${id}')">🍳 조리 시작!</button>` : ''}
+        ${status==='cooking' && !isPickup ? `<button class="deliver-start-btn" onclick="startDelivery('${id}')">🛵 배달 시작!</button>` : ''}
+        ${status==='cooking' &&  isPickup ? `<button class="deliver-start-btn" style="background:linear-gradient(135deg,#8E24AA,#6A1B9A);box-shadow:0 4px 15px rgba(106,27,154,0.35)" onclick="markReadyForPickup('${id}')">🛎️ 픽업 가능!</button>` : ''}
+        ${status==='delivering' ? `<button class="deliver-btn" onclick="completeDelivery('${id}')">✅ 배달 완료!</button>` : ''}
+        ${status==='ready'      ? `<button class="deliver-btn" style="background:linear-gradient(135deg,#8E24AA,#6A1B9A);box-shadow:0 4px 15px rgba(106,27,154,0.35)" onclick="completeDelivery('${id}')">✅ 픽업 완료!</button>` : ''}
         ${(status==='pending'||status==='cooking') ? `<button class="cancel-btn" style="margin-bottom:8px" onclick="showCancelPanel('${id}')">❌ 주문 취소</button>` : ''}`;
 
       return `
@@ -1204,7 +1231,18 @@ function initFirebase() {
       .catch(e => alert('오류: ' + e.message));
   }
 
-  // ── Complete delivery ──────────────────────────────────
+  function markReadyForPickup(id) {
+    if (!DB) return;
+    DB.get(DB.ref(DB.db, `currentOrders/${id}`))
+      .then(snap => {
+        const order = snap.val();
+        if (!order) return;
+        return DB.set(DB.ref(DB.db, `currentOrders/${id}`), { ...order, status: 'ready' });
+      })
+      .catch(e => alert('오류: ' + e.message));
+  }
+
+  // ── Complete delivery / pickup ─────────────────────────
   function completeDelivery(id) {
     if (!DB) return;
     DB.get(DB.ref(DB.db, `currentOrders/${id}`))
