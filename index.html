@@ -301,6 +301,7 @@
   let role = null;
   let DB = null; // will hold { db, ref, set, onValue, remove }
   let stopListening = null;
+  let orderPending = false; // 주문을 실제로 보낸 상태인지 추적
 
   MENU.forEach(m => qty[m.id] = 0);
 
@@ -421,6 +422,7 @@ function initFirebase() {
 
     DB.set(DB.ref(DB.db, 'currentOrder'), order)
       .then(() => {
+        orderPending = true;
         document.getElementById('order-form').style.display = 'none';
         document.getElementById('order-sent').style.display = 'block';
       })
@@ -433,7 +435,9 @@ function initFirebase() {
     const r = DB.ref(DB.db, 'currentOrder');
     const unsub = DB.onValue(r, snap => {
       if (role !== 'customer') return;
-      if (!snap.val()) {
+      if (!snap.val() && orderPending) {
+        // 실제로 주문을 보낸 상태에서 주문이 사라졌을 때만 알림
+        orderPending = false;
         document.getElementById('order-sent').style.display = 'none';
         document.getElementById('order-form').style.display = 'block';
         MENU.forEach(m => qty[m.id] = 0);
