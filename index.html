@@ -14,46 +14,7 @@
       min-height: 100vh;
     }
 
-    /* ─── SETUP SCREEN ─── */
-    #setup-screen {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      min-height: 100vh;
-      padding: 30px 20px;
-      background: #fff3cd;
-    }
-    .setup-card {
-      background: white;
-      border-radius: 20px;
-      padding: 30px;
-      max-width: 480px;
-      width: 100%;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.1);
-    }
-    .setup-title { font-size: 1.5rem; font-weight: 900; color: #E65100; margin-bottom: 10px; }
-    .setup-desc { font-size: 0.9rem; color: #666; line-height: 1.7; margin-bottom: 20px; }
-    .setup-label { font-size: 0.85rem; font-weight: 700; color: #555; margin-bottom: 5px; display: block; }
-    .setup-input {
-      width: 100%; border: 2px solid #eee; border-radius: 10px;
-      padding: 10px 12px; font-size: 0.9rem;
-      font-family: 'Noto Sans KR', sans-serif;
-      margin-bottom: 12px; outline: none;
-    }
-    .setup-input:focus { border-color: #FF7043; }
-    .setup-btn {
-      width: 100%; padding: 14px; background: linear-gradient(135deg, #FF7043, #FF5722);
-      color: white; border: none; border-radius: 12px;
-      font-size: 1rem; font-weight: 900; font-family: 'Noto Sans KR', sans-serif;
-      cursor: pointer; margin-top: 5px;
-    }
-    .setup-hint {
-      background: #FFF3E0; border-radius: 10px; padding: 12px;
-      font-size: 0.8rem; color: #E65100; margin-top: 15px; line-height: 1.6;
-    }
-
-    /* ─── HOME SCREEN ─── */
+/* ─── HOME SCREEN ─── */
     #home-screen {
       display: none;
       flex-direction: column;
@@ -249,36 +210,6 @@
 </head>
 <body>
 
-<!-- ════════ SETUP SCREEN ════════ -->
-<div id="setup-screen">
-  <div class="setup-card">
-    <div class="setup-title">🔧 Firebase 설정</div>
-    <div class="setup-desc">
-      처음 한 번만 설정하면 돼요!<br/>
-      <strong>firebase.google.com</strong>에서 프로젝트를 만들고<br/>
-      아래에 정보를 입력해 주세요.
-    </div>
-
-    <label class="setup-label">🔑 API Key</label>
-    <input class="setup-input" id="cfg-apiKey" placeholder="AIzaSy..." />
-
-    <label class="setup-label">📦 Project ID</label>
-    <input class="setup-input" id="cfg-projectId" placeholder="my-kkochi-game" />
-
-    <label class="setup-label">🗄️ Database URL</label>
-    <input class="setup-input" id="cfg-dbUrl" placeholder="https://my-kkochi-game-default-rtdb.firebaseio.com" />
-
-    <label class="setup-label">📱 App ID</label>
-    <input class="setup-input" id="cfg-appId" placeholder="1:123456789:web:abc123..." />
-
-    <button class="setup-btn" onclick="saveConfig()">✅ 저장하고 시작하기</button>
-
-    <div class="setup-hint">
-      💡 <strong>어디서 찾나요?</strong><br/>
-      Firebase Console → 프로젝트 설정 → 일반 탭 → 내 앱 → SDK 설정 및 구성
-    </div>
-  </div>
-</div>
 
 <!-- ════════ HOME SCREEN ════════ -->
 <div id="home-screen">
@@ -373,31 +304,7 @@
 
   MENU.forEach(m => qty[m.id] = 0);
 
-  // ── Config management ──────────────────────────────────
-  const LS_KEY = 'kkochi_firebase_config';
-
-  function loadConfig() {
-    try { return JSON.parse(localStorage.getItem(LS_KEY)); } catch(e) { return null; }
-  }
-
-  function saveConfig() {
-    const apiKey    = document.getElementById('cfg-apiKey').value.trim();
-    const projectId = document.getElementById('cfg-projectId').value.trim();
-    const dbUrl     = document.getElementById('cfg-dbUrl').value.trim();
-    const appId     = document.getElementById('cfg-appId').value.trim();
-
-    if (!apiKey || !projectId || !dbUrl || !appId) {
-      alert('모든 항목을 입력해 주세요!');
-      return;
-    }
-
-    const cfg = { apiKey, projectId, dbUrl, appId };
-    localStorage.setItem(LS_KEY, JSON.stringify(cfg));
-    initFirebase(cfg);
-  }
-
-  function initFirebase(cfg) {
-    // Dynamically import Firebase with the provided config
+function initFirebase() {
     const script = document.createElement('script');
     script.type = 'module';
     script.textContent = `
@@ -405,13 +312,13 @@
       import { getDatabase, ref, set, onValue, remove } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js';
 
       const firebaseConfig = {
-        apiKey:            "${cfg.apiKey}",
-        authDomain:        "${cfg.projectId}.firebaseapp.com",
-        databaseURL:       "${cfg.dbUrl}",
-        projectId:         "${cfg.projectId}",
-        storageBucket:     "${cfg.projectId}.appspot.com",
-        messagingSenderId: "000000000000",
-        appId:             "${cfg.appId}"
+        apiKey:            "AIzaSyCKGQKH0JyFMzLgFNhxqxksbfud-cBUL48",
+        authDomain:        "kkochi-game.firebaseapp.com",
+        databaseURL:       "https://kkochi-game-default-rtdb.firebaseio.com",
+        projectId:         "kkochi-game",
+        storageBucket:     "kkochi-game.firebasestorage.app",
+        messagingSenderId: "692468625541",
+        appId:             "1:692468625541:web:148514dbdf4c8eebf0b9ec"
       };
 
       const app = initializeApp(firebaseConfig);
@@ -430,16 +337,10 @@
 
   // ── Startup ────────────────────────────────────────────
   window.addEventListener('load', () => {
-    const cfg = loadConfig();
-    if (cfg) {
-      initFirebase(cfg);
-    } else {
-      document.getElementById('setup-screen').style.display = 'flex';
-    }
+    initFirebase();
   });
 
   function showHome() {
-    document.getElementById('setup-screen').style.display = 'none';
     document.getElementById('home-screen').style.display = 'flex';
   }
 
