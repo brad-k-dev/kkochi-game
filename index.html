@@ -1149,7 +1149,7 @@ function initFirebase() {
     show('btn-cook',             status === 'pending');
     show('btn-deliver-start',    status === 'cooking');
     show('btn-deliver-complete', status === 'delivering');
-    show('btn-cancel',           status === 'pending');
+    show('btn-cancel',           status === 'pending' || status === 'cooking');
   }
 
   // ── Step buttons ───────────────────────────────────────
