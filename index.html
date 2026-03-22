@@ -517,6 +517,7 @@
 
   <div class="tab-nav">
     <button class="tab-btn active" id="tab-customer-order"   onclick="switchTab('customer','order')">🛒 주문하기</button>
+    <button class="tab-btn"        id="tab-customer-current" onclick="switchTab('customer','current')" style="display:none">🍢 주문 중 <span id="current-order-badge" style="background:#FF7043;color:white;border-radius:20px;padding:1px 7px;font-size:0.75rem;font-weight:900;margin-left:2px">0</span></button>
     <button class="tab-btn"        id="tab-customer-history" onclick="switchTab('customer','history')">📋 주문 내역</button>
   </div>
 
@@ -585,11 +586,11 @@
       </button>
     </div>
 
-    <!-- 진행 중인 주문 (주문 시 표시) -->
-    <div id="active-orders-wrap" style="display:none; margin-bottom:16px">
-      <div style="font-size:0.88rem;font-weight:900;color:#E65100;margin-bottom:10px">🍢 진행 중인 주문</div>
-      <div id="active-orders-list"></div>
-    </div>
+  </div>
+
+  <!-- 현재 주문 중 탭 -->
+  <div id="customer-current-tab" style="display:none">
+    <div id="active-orders-list"></div>
   </div>
 
   <!-- 주문 내역 탭 -->
@@ -753,10 +754,14 @@ function initFirebase() {
     document.getElementById('owner-page').style.display = 'none';
     document.getElementById('order-form').style.display = 'block';
     // 탭 초기화
-    document.getElementById('customer-order-tab').style.display = 'block';
+    document.getElementById('customer-order-tab').style.display   = 'block';
+    document.getElementById('customer-current-tab').style.display = 'none';
     document.getElementById('customer-history-tab').style.display = 'none';
     document.getElementById('tab-customer-order').classList.add('active');
+    document.getElementById('tab-customer-current').classList.remove('active');
+    document.getElementById('tab-customer-current').style.display = 'none';
     document.getElementById('tab-customer-history').classList.remove('active');
+    document.getElementById('current-order-badge').textContent = '0';
     document.getElementById('owner-order-tab').style.display = 'block';
     document.getElementById('owner-history-tab').style.display = 'none';
     document.getElementById('tab-owner-order').classList.add('active');
@@ -1040,14 +1045,28 @@ function initFirebase() {
   }
 
   function renderActiveOrders(ordersMap) {
-    const wrap = document.getElementById('active-orders-wrap');
-    const list = document.getElementById('active-orders-list');
+    const list  = document.getElementById('active-orders-list');
+    const tabBtn = document.getElementById('tab-customer-current');
+    const badge  = document.getElementById('current-order-badge');
     const orders = Object.entries(ordersMap).sort(([,a],[,b]) => a.ts - b.ts);
+    const prevCount = activeOrderIds.size;
 
     if (orders.length === 0) {
-      wrap.style.display = 'none';
+      tabBtn.style.display = 'none';
+      badge.textContent = '0';
       list.innerHTML = '';
+      // 주문 탭으로 복귀
+      if (role === 'customer') switchTab('customer', 'order');
       return;
+    }
+
+    // 탭 버튼 표시 + 배지 업데이트
+    tabBtn.style.display = 'flex';
+    badge.textContent = orders.length;
+
+    // 새 주문이 생겼을 때 자동으로 탭 전환
+    if (orders.length > prevCount && role === 'customer') {
+      switchTab('customer', 'current');
     }
 
     const statusCfg = {
@@ -1084,8 +1103,6 @@ function initFirebase() {
           </div>
         </div>`;
     }).join('');
-
-    wrap.style.display = 'block';
   }
 
   function updateOrderFormState() {
@@ -1340,19 +1357,21 @@ function initFirebase() {
 
   // ── Tab switching ───────────────────────────────────────
   function switchTab(r, tab) {
-    const isHistory = tab === 'history';
     if (r === 'customer') {
-      document.getElementById('customer-order-tab').style.display   = isHistory ? 'none'  : 'block';
-      document.getElementById('customer-history-tab').style.display = isHistory ? 'block' : 'none';
-      document.getElementById('tab-customer-order').classList.toggle('active', !isHistory);
-      document.getElementById('tab-customer-history').classList.toggle('active', isHistory);
+      document.getElementById('customer-order-tab').style.display   = tab === 'order'   ? 'block' : 'none';
+      document.getElementById('customer-current-tab').style.display = tab === 'current' ? 'block' : 'none';
+      document.getElementById('customer-history-tab').style.display = tab === 'history' ? 'block' : 'none';
+      document.getElementById('tab-customer-order').classList.toggle('active',   tab === 'order');
+      document.getElementById('tab-customer-current').classList.toggle('active', tab === 'current');
+      document.getElementById('tab-customer-history').classList.toggle('active', tab === 'history');
     } else {
+      const isHistory = tab === 'history';
       document.getElementById('owner-order-tab').style.display   = isHistory ? 'none'  : 'block';
       document.getElementById('owner-history-tab').style.display = isHistory ? 'block' : 'none';
       document.getElementById('tab-owner-order').classList.toggle('active', !isHistory);
       document.getElementById('tab-owner-history').classList.toggle('active', isHistory);
     }
-    if (isHistory) {
+    if (tab === 'history') {
       loadHistory(r);
     } else {
       if (historyUnsub) { historyUnsub(); historyUnsub = null; }
