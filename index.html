@@ -676,7 +676,7 @@
   let sizes = {};      // 각 메뉴별 사이즈: 'small' | 'large' | null
   let doneness = {};   // 고기 메뉴별 익힘: 'rare' | 'medium' | 'well' | null
   let selectedSauces = new Set();
-  let orderType = 'pickup';       // 'delivery' | 'pickup'
+  let orderType = 'delivery';       // 'delivery' | 'pickup'
   let paymentMethod = 'auto';     // 'auto' | 'meet'
   let role = null;
   let DB = null;
@@ -749,7 +749,7 @@ function initFirebase() {
     document.getElementById('tab-owner-history').classList.remove('active');
     MENU.forEach(m => qty[m.id] = 0);
     document.getElementById('special-req').value = '';
-    orderType = 'pickup';
+    orderType = 'delivery';
     paymentMethod = 'auto';
   }
 
@@ -763,10 +763,10 @@ function initFirebase() {
       buildMenu();
       buildSauces();
       // 주문/결제 방식 칩 초기 상태
-      orderType = 'pickup';
+      orderType = 'delivery';
       paymentMethod = 'auto';
-      document.getElementById('ot-pickup').classList.add('on');
-      document.getElementById('ot-delivery').classList.remove('on');
+      document.getElementById('ot-pickup').classList.remove('on');
+      document.getElementById('ot-delivery').classList.add('on');
       document.getElementById('pm-auto').classList.add('on');
       document.getElementById('pm-meet').classList.remove('on');
       updatePriceSummary();
@@ -995,15 +995,15 @@ function initFirebase() {
     document.getElementById('order-form').style.display = 'block';
     MENU.forEach(m => qty[m.id] = 0);
     document.getElementById('special-req').value = '';
-    orderType = 'pickup';
+    orderType = 'delivery';
     paymentMethod = 'auto';
     buildMenu();
     buildSauces();
     document.getElementById('count-disp').textContent = '0';
     document.getElementById('order-btn').disabled = true;
     // 옵션 칩 초기화
-    document.getElementById('ot-pickup').classList.add('on');
-    document.getElementById('ot-delivery').classList.remove('on');
+    document.getElementById('ot-pickup').classList.remove('on');
+    document.getElementById('ot-delivery').classList.add('on');
     document.getElementById('pm-auto').classList.add('on');
     document.getElementById('pm-meet').classList.remove('on');
     updatePriceSummary();
