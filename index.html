@@ -307,6 +307,33 @@
       font-size: 0.85rem; font-weight: 700;
     }
 
+    /* ─── STATUS STEP BUTTONS ─── */
+    .cook-btn {
+      width: 100%; padding: 18px;
+      background: linear-gradient(135deg, #FF8F00, #F57C00);
+      color: white; border: none; border-radius: 16px;
+      font-size: 1.2rem; font-weight: 900;
+      font-family: 'Noto Sans KR', sans-serif;
+      cursor: pointer;
+      box-shadow: 0 4px 15px rgba(255,143,0,0.35);
+      transition: transform 0.15s;
+      margin-bottom: 12px;
+    }
+    .cook-btn:hover { transform: translateY(-2px); }
+
+    .deliver-start-btn {
+      width: 100%; padding: 18px;
+      background: linear-gradient(135deg, #1E88E5, #1565C0);
+      color: white; border: none; border-radius: 16px;
+      font-size: 1.2rem; font-weight: 900;
+      font-family: 'Noto Sans KR', sans-serif;
+      cursor: pointer;
+      box-shadow: 0 4px 15px rgba(30,136,229,0.35);
+      transition: transform 0.15s;
+      margin-bottom: 12px;
+    }
+    .deliver-start-btn:hover { transform: translateY(-2px); }
+
     .deliver-btn {
       width: 100%; padding: 18px;
       background: linear-gradient(135deg, #43A047, #388E3C);
@@ -316,7 +343,7 @@
       cursor: pointer;
       box-shadow: 0 4px 15px rgba(67,160,71,0.35);
       transition: transform 0.15s;
-      margin-bottom: 30px;
+      margin-bottom: 12px;
     }
     .deliver-btn:hover { transform: translateY(-2px); }
 
@@ -555,9 +582,9 @@
     </div>
 
     <div id="order-sent">
-      <span class="sent-emoji">🍢</span>
-      <div class="sent-title">주문이 전달됐어요!</div>
-      <div class="sent-sub">사장님이 열심히 준비하고 있어요</div>
+      <span class="sent-emoji" id="sent-emoji">🍢</span>
+      <div class="sent-title" id="sent-title">주문이 전달됐어요!</div>
+      <div class="sent-sub"   id="sent-sub">사장님이 확인 중이에요</div>
       <div class="dots" style="margin-top:20px;"><span>●</span><span>●</span><span>●</span></div>
     </div>
   </div>
@@ -609,8 +636,11 @@
         <span class="order-info-tag total" id="oi-total"></span>
       </div>
 
-      <button class="deliver-btn" onclick="completeDelivery()">✅ 배달 완료!</button>
-      <button class="cancel-btn"  onclick="showCancelPanel()">❌ 주문 취소</button>
+      <!-- 단계별 버튼 (status에 따라 JS로 표시/숨김) -->
+      <button class="cook-btn"          id="btn-cook"             onclick="startCooking()"     style="display:none">🍳 조리 시작!</button>
+      <button class="deliver-start-btn" id="btn-deliver-start"    onclick="startDelivery()"    style="display:none">🛵 배달 시작!</button>
+      <button class="deliver-btn"       id="btn-deliver-complete" onclick="completeDelivery()" style="display:none">✅ 배달 완료!</button>
+      <button class="cancel-btn"        id="btn-cancel"           onclick="showCancelPanel()"  style="display:none; margin-bottom:30px">❌ 주문 취소</button>
     </div>
   </div>
 
@@ -973,10 +1003,19 @@ function initFirebase() {
       if (data && data.status === 'cancelled' && orderPending) {
         orderPending = false;
         const reason = data.cancelReason || '취소됐어요';
-        // 취소 처리 후 currentOrder 삭제
         DB.remove(DB.ref(DB.db, 'currentOrder'));
         resetCustomerForm();
         showOverlay('😢', '주문이 취소됐어요', reason);
+        return;
+      }
+
+      // 조리 중 / 배달 중 상태 업데이트
+      if (data && data.status === 'cooking' && orderPending) {
+        updateCustomerStatus('cooking');
+        return;
+      }
+      if (data && data.status === 'delivering' && orderPending) {
+        updateCustomerStatus('delivering');
         return;
       }
 
@@ -988,6 +1027,18 @@ function initFirebase() {
       }
     });
     stopListening = unsub;
+  }
+
+  function updateCustomerStatus(status) {
+    const configs = {
+      pending:    { emoji: '🍢', title: '주문이 전달됐어요!', sub: '사장님이 확인 중이에요' },
+      cooking:    { emoji: '🍳', title: '조리 중이에요!',      sub: '맛있게 만들고 있어요 😋' },
+      delivering: { emoji: '🛵', title: '배달 중이에요!',      sub: '곧 도착해요! 기다려주세요 🎉' },
+    };
+    const c = configs[status] || configs.pending;
+    document.getElementById('sent-emoji').textContent = c.emoji;
+    document.getElementById('sent-title').textContent = c.title;
+    document.getElementById('sent-sub').textContent   = c.sub;
   }
 
   function resetCustomerForm() {
@@ -1084,6 +1135,44 @@ function initFirebase() {
     } else {
       infoRow.style.display = 'none';
     }
+
+    // 주문 상태에 따라 알림 배너 + 버튼 업데이트
+    const status = data.status || 'pending';
+    const alertMsgs = {
+      pending:    '🔔 새 주문이 들어왔어요!',
+      cooking:    '🍳 조리 중이에요!',
+      delivering: '🛵 배달 중이에요!'
+    };
+    document.querySelector('.order-alert-txt').textContent = alertMsgs[status] || alertMsgs.pending;
+
+    const show = (id, visible) => document.getElementById(id).style.display = visible ? 'block' : 'none';
+    show('btn-cook',             status === 'pending');
+    show('btn-deliver-start',    status === 'cooking');
+    show('btn-deliver-complete', status === 'delivering');
+    show('btn-cancel',           status === 'pending');
+  }
+
+  // ── Step buttons ───────────────────────────────────────
+  function startCooking() {
+    if (!DB) return;
+    DB.get(DB.ref(DB.db, 'currentOrder'))
+      .then(snap => {
+        const order = snap.val();
+        if (!order) return;
+        return DB.set(DB.ref(DB.db, 'currentOrder'), { ...order, status: 'cooking' });
+      })
+      .catch(e => alert('오류: ' + e.message));
+  }
+
+  function startDelivery() {
+    if (!DB) return;
+    DB.get(DB.ref(DB.db, 'currentOrder'))
+      .then(snap => {
+        const order = snap.val();
+        if (!order) return;
+        return DB.set(DB.ref(DB.db, 'currentOrder'), { ...order, status: 'delivering' });
+      })
+      .catch(e => alert('오류: ' + e.message));
   }
 
   // ── Complete delivery ──────────────────────────────────
