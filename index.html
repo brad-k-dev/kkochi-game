@@ -128,6 +128,54 @@
     }
     .total-bar span { font-size: 1.4rem; }
 
+    /* ─── OPTION BOX (주문방식 / 결제방식) ─── */
+    .option-box {
+      background: white; border-radius: 16px;
+      padding: 15px; margin-bottom: 14px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.07);
+    }
+    .option-label { font-size: 0.88rem; font-weight: 700; color: #666; display: block; margin-bottom: 10px; }
+    .option-chips { display: flex; gap: 8px; }
+    .option-chip {
+      flex: 1; padding: 10px 8px; border-radius: 12px;
+      border: 2px solid #eee; background: white;
+      font-size: 0.82rem; font-weight: 700; color: #aaa;
+      font-family: 'Noto Sans KR', sans-serif;
+      cursor: pointer; transition: all 0.15s; text-align: center; line-height: 1.5;
+    }
+    .option-chip.on { border-color: #FF7043; background: #FFF3E0; color: #E65100; }
+
+    /* ─── PRICE SUMMARY ─── */
+    .price-summary {
+      background: white; border-radius: 16px;
+      padding: 16px 18px; margin-bottom: 14px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.07);
+    }
+    .price-row {
+      display: flex; justify-content: space-between; align-items: center;
+      font-size: 0.88rem; color: #888; padding: 4px 0;
+    }
+    .price-row-total {
+      display: flex; justify-content: space-between; align-items: center;
+      font-size: 1.1rem; font-weight: 900; color: #E65100;
+      padding: 10px 0 4px; margin-top: 6px;
+      border-top: 2px solid #FFF3E0;
+    }
+
+    /* ─── OWNER ORDER INFO TAGS ─── */
+    .order-info-row {
+      display: flex; flex-wrap: wrap; gap: 6px;
+      margin-top: 12px; padding-top: 12px;
+      border-top: 1px solid #f5f5f5;
+    }
+    .order-info-tag {
+      background: #F5F5F5; color: #555; border-radius: 8px;
+      padding: 4px 10px; font-size: 0.8rem; font-weight: 700;
+    }
+    .order-info-tag.delivery { background: #E3F2FD; color: #1565C0; }
+    .order-info-tag.payment  { background: #E8F5E9; color: #2E7D32; }
+    .order-info-tag.total    { background: #FFF3E0; color: #E65100; font-size: 0.95rem; }
+
     /* ─── SAUCE ─── */
     .sauce-box {
       background: white; border-radius: 16px;
@@ -459,6 +507,31 @@
         <div class="sauce-chips" id="sauce-chips"></div>
       </div>
 
+      <!-- 주문 방식 -->
+      <div class="option-box">
+        <span class="option-label">🛵 주문 방식</span>
+        <div class="option-chips">
+          <button class="option-chip" id="ot-pickup"   onclick="setOrderType('pickup')">🏠 픽업<br><small style="font-weight:400;font-size:0.72rem;color:inherit">직접 가져가기</small></button>
+          <button class="option-chip" id="ot-delivery" onclick="setOrderType('delivery')">🛵 배달<br><small style="font-weight:400;font-size:0.72rem;color:inherit">+1,000원</small></button>
+        </div>
+      </div>
+
+      <!-- 결제 방식 -->
+      <div class="option-box">
+        <span class="option-label">💳 결제 방식</span>
+        <div class="option-chips">
+          <button class="option-chip" id="pm-auto" onclick="setPayment('auto')">🤖 자동 결제<br><small style="font-weight:400;font-size:0.72rem;color:inherit">바로 처리돼요</small></button>
+          <button class="option-chip" id="pm-meet" onclick="setPayment('meet')">🤝 만나서 결제<br><small style="font-weight:400;font-size:0.72rem;color:inherit">직접 드릴게요</small></button>
+        </div>
+      </div>
+
+      <!-- 가격 요약 -->
+      <div class="price-summary" id="price-summary">
+        <div class="price-row"><span>꼬치 금액</span><span id="ps-items">0원</span></div>
+        <div class="price-row" id="ps-delivery-row" style="display:none"><span>🛵 배달비</span><span>+1,000원</span></div>
+        <div class="price-row-total"><span>합계</span><span id="ps-total">0원</span></div>
+      </div>
+
       <div class="special-box">
         <label>💬 특별 요청사항</label>
         <textarea id="special-req" rows="2" placeholder="예: 맵지 않게 해주세요, 많이 주세요…"></textarea>
@@ -517,6 +590,13 @@
         <div class="note-label">💬 특별 요청사항</div>
         <div class="note-text" id="note-text"></div>
       </div>
+      <!-- 주문 정보 태그 (사장님 화면) -->
+      <div class="order-info-row" id="order-info-row" style="display:none">
+        <span class="order-info-tag" id="oi-type"></span>
+        <span class="order-info-tag" id="oi-payment"></span>
+        <span class="order-info-tag total" id="oi-total"></span>
+      </div>
+
       <button class="deliver-btn" onclick="completeDelivery()">✅ 배달 완료!</button>
       <button class="cancel-btn"  onclick="showCancelPanel()">❌ 주문 취소</button>
     </div>
@@ -584,6 +664,8 @@
   let sizes = {};      // 각 메뉴별 사이즈: 'small' | 'large' | null
   let doneness = {};   // 고기 메뉴별 익힘: 'rare' | 'medium' | 'well' | null
   let selectedSauces = new Set();
+  let orderType = 'pickup';       // 'delivery' | 'pickup'
+  let paymentMethod = 'auto';     // 'auto' | 'meet'
   let role = null;
   let DB = null;
   let stopListening = null;
@@ -655,6 +737,8 @@ function initFirebase() {
     document.getElementById('tab-owner-history').classList.remove('active');
     MENU.forEach(m => qty[m.id] = 0);
     document.getElementById('special-req').value = '';
+    orderType = 'pickup';
+    paymentMethod = 'auto';
   }
 
   // ── Role selection ─────────────────────────────────────
@@ -666,6 +750,14 @@ function initFirebase() {
       document.getElementById('customer-page').style.display = 'block';
       buildMenu();
       buildSauces();
+      // 주문/결제 방식 칩 초기 상태
+      orderType = 'pickup';
+      paymentMethod = 'auto';
+      document.getElementById('ot-pickup').classList.add('on');
+      document.getElementById('ot-delivery').classList.remove('on');
+      document.getElementById('pm-auto').classList.add('on');
+      document.getElementById('pm-meet').classList.remove('on');
+      updatePriceSummary();
       listenStatus();
     } else {
       document.getElementById('owner-page').style.display = 'block';
@@ -708,6 +800,7 @@ function initFirebase() {
       document.getElementById(`sz-${id}-${s}`)
         .classList.toggle('on', s === size);
     });
+    updatePriceSummary();
   }
 
   function setDoneness(id, level) {
@@ -740,6 +833,42 @@ function initFirebase() {
     }
   }
 
+  // ── Order type & payment ────────────────────────────────
+  function setOrderType(type) {
+    orderType = type;
+    document.getElementById('ot-pickup').classList.toggle('on', type === 'pickup');
+    document.getElementById('ot-delivery').classList.toggle('on', type === 'delivery');
+    updatePriceSummary();
+  }
+
+  function setPayment(method) {
+    paymentMethod = method;
+    document.getElementById('pm-auto').classList.toggle('on', method === 'auto');
+    document.getElementById('pm-meet').classList.toggle('on', method === 'meet');
+  }
+
+  // ── Price calculation ───────────────────────────────────
+  function calcPrice() {
+    let items = 0;
+    MENU.forEach(m => {
+      if (qty[m.id] > 0) {
+        const perItem = 2000 + (sizes[m.id] === 'large' ? 500 : 0);
+        items += perItem * qty[m.id];
+      }
+    });
+    const delivery = orderType === 'delivery' ? 1000 : 0;
+    return { items, delivery, total: items + delivery };
+  }
+
+  function won(n) { return n.toLocaleString() + '원'; }
+
+  function updatePriceSummary() {
+    const p = calcPrice();
+    document.getElementById('ps-items').textContent = won(p.items);
+    document.getElementById('ps-total').textContent = won(p.total);
+    document.getElementById('ps-delivery-row').style.display = orderType === 'delivery' ? 'flex' : 'none';
+  }
+
   function total() { return Object.values(qty).reduce((a,b)=>a+b,0); }
 
   function chg(id, delta) {
@@ -768,6 +897,7 @@ function initFirebase() {
       const b = document.getElementById(`plus-${m.id}`);
       if (b) b.disabled = t >= 4;
     });
+    updatePriceSummary();
   }
 
   // ── Place order ────────────────────────────────────────
@@ -793,10 +923,19 @@ function initFirebase() {
       .filter(s => selectedSauces.has(s.id))
       .map(s => ({ id: s.id, name: s.name, emoji: s.emoji }));
 
+    const price = calcPrice();
+    const ORDER_TYPE_LABELS   = { pickup: '🏠 픽업', delivery: '🛵 배달' };
+    const PAYMENT_METHOD_LABELS = { auto: '🤖 자동결제', meet: '🤝 만나서결제' };
+
     const order = {
       items,
       sauces,
       special: document.getElementById('special-req').value.trim(),
+      orderType,
+      orderTypeLabel: ORDER_TYPE_LABELS[orderType],
+      paymentMethod,
+      paymentMethodLabel: PAYMENT_METHOD_LABELS[paymentMethod],
+      price,
       ts: Date.now(),
       status: 'pending'
     };
@@ -844,10 +983,18 @@ function initFirebase() {
     document.getElementById('order-form').style.display = 'block';
     MENU.forEach(m => qty[m.id] = 0);
     document.getElementById('special-req').value = '';
+    orderType = 'pickup';
+    paymentMethod = 'auto';
     buildMenu();
     buildSauces();
     document.getElementById('count-disp').textContent = '0';
     document.getElementById('order-btn').disabled = true;
+    // 옵션 칩 초기화
+    document.getElementById('ot-pickup').classList.add('on');
+    document.getElementById('ot-delivery').classList.remove('on');
+    document.getElementById('pm-auto').classList.add('on');
+    document.getElementById('pm-meet').classList.remove('on');
+    updatePriceSummary();
   }
 
   // ── Owner: listen for new orders ──────────────────────
@@ -905,6 +1052,25 @@ function initFirebase() {
       document.getElementById('note-text').textContent = data.special;
     } else {
       noteCard.style.display = 'none';
+    }
+
+    // 가격 / 주문방식 / 결제방식 태그
+    const infoRow = document.getElementById('order-info-row');
+    if (data.price || data.orderTypeLabel || data.paymentMethodLabel) {
+      infoRow.style.display = 'flex';
+      const otTag = document.getElementById('oi-type');
+      otTag.textContent = data.orderTypeLabel || '';
+      otTag.className = 'order-info-tag ' + (data.orderType === 'delivery' ? 'delivery' : '');
+
+      const pmTag = document.getElementById('oi-payment');
+      pmTag.textContent = data.paymentMethodLabel || '';
+      pmTag.className = 'order-info-tag payment';
+
+      const totTag = document.getElementById('oi-total');
+      totTag.textContent = data.price ? won(data.price.total) : '';
+      totTag.className = 'order-info-tag total';
+    } else {
+      infoRow.style.display = 'none';
     }
   }
 
@@ -1094,11 +1260,19 @@ function initFirebase() {
            <textarea class="review-textarea" id="rev-text-${o.id}" rows="2" placeholder="맛이 어땠나요? (선택사항)"></textarea>
            <button class="review-submit-btn" onclick="submitReview('${o.id}')">💌 리뷰 제출하기</button>`;
 
+      const orderInfoTags = o.orderTypeLabel || o.price
+        ? `<div class="order-info-row">
+            ${o.orderTypeLabel ? `<span class="order-info-tag ${o.orderType === 'delivery' ? 'delivery' : ''}">${o.orderTypeLabel}</span>` : ''}
+            ${o.paymentMethodLabel ? `<span class="order-info-tag payment">${o.paymentMethodLabel}</span>` : ''}
+            ${o.price ? `<span class="order-info-tag total">${won(o.price.total)}</span>` : ''}
+           </div>` : '';
+
       return `
         <div class="history-card">
           <div class="history-time">🕐 ${formatTime(o.ts)}</div>
           ${historyItemsHtml(o.items)}
           ${saucesHtml(o.sauces)}
+          ${orderInfoTags}
           ${o.special ? `<div class="note-card" style="margin-top:8px"><div class="note-label">💬 특별 요청</div><div class="note-text">${o.special}</div></div>` : ''}
           <div class="review-section">
             <div class="review-section-label">${rev ? '⭐ 남긴 리뷰' : '⭐ 리뷰 남기기'}</div>
@@ -1121,11 +1295,19 @@ function initFirebase() {
     }
     list.innerHTML = orders.map(o => {
       const rev = o.review;
+      const orderInfoTagsOwner = o.orderTypeLabel || o.price
+        ? `<div class="order-info-row">
+            ${o.orderTypeLabel ? `<span class="order-info-tag ${o.orderType === 'delivery' ? 'delivery' : ''}">${o.orderTypeLabel}</span>` : ''}
+            ${o.paymentMethodLabel ? `<span class="order-info-tag payment">${o.paymentMethodLabel}</span>` : ''}
+            ${o.price ? `<span class="order-info-tag total">${won(o.price.total)}</span>` : ''}
+           </div>` : '';
+
       return `
         <div class="history-card">
           <div class="history-time">🕐 ${formatTime(o.ts)}</div>
           ${historyItemsHtml(o.items)}
           ${saucesHtml(o.sauces)}
+          ${orderInfoTagsOwner}
           ${o.special ? `<div class="note-card" style="margin-top:8px"><div class="note-label">💬 특별 요청</div><div class="note-text">${o.special}</div></div>` : ''}
           <div class="review-section">
             <div class="review-section-label">💌 아빠의 리뷰</div>
